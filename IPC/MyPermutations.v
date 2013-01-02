@@ -4,6 +4,13 @@ Require Import Coq.Relations.Relations.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Setoids.Setoid.
 
+Lemma eq_then_Permutation: forall{A:Type} (l1 l2:list A), l1 = l2 -> Permutation l1 l2.
+Proof.
+intros A l1 l2 H.
+rewrite H; reflexivity.
+Qed.
+
+
 Lemma app_compat_perm_latter(A:Type) : forall l a1 a2:list A, Permutation a1 a2 -> Permutation (l++a1) (l++a2).
 Proof.
 intros l a1 a2 Ha.

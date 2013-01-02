@@ -5,6 +5,7 @@ Require Import Coq.Classes.Morphisms.
 Require Import Coq.Setoids.Setoid.
 Require Import Coq.Arith.Arith.
 Require Import MyPermutations.
+Require Import PProp.
 Require Import LJ.
 
 (* Dyckhoff's LJ *)
@@ -126,41 +127,6 @@ induction H.
   apply DLJ_disj_succedent_r.
   apply IHDLJ_provable.
   reflexivity.
-Qed.
-
-
-Lemma PProp_perm_select:
-  forall(P1 P2:PProp) (L1 L2:list PProp),
-    Permutation (P1::L1) (P2::L2) ->
-      (
-        P1 = P2 /\ Permutation L1 L2
-      ) \/ (
-        exists L2',
-          Permutation L2 (P1::L2') /\
-          Permutation L1 (P2::L2')
-      ).
-Proof.
-intros P1 P2 L1 L2 HP.
-assert (HI:=in_eq P1 L1).
-rewrite HP in HI.
-destruct HI as [HI|HI].
-- left.
-  split.
-  + symmetry.
-    exact HI.
-  + rewrite HI in HP.
-    apply Permutation_cons_inv in HP.
-    exact HP.
-- right.
-  destruct (in_split _ _ HI) as (L2A,(L2B,HL2)).
-  exists (L2A++L2B).
-  split.
-  + rewrite HL2.
-    perm.
-  + apply Permutation_cons_inv with (a:=P1).
-    rewrite HP.
-    rewrite HL2.
-    perm.
 Qed.
 
 Lemma DLJ_conj_elimL:
