@@ -26,10 +26,20 @@ apply In_compat_perm.
 apply PProp_dec.
 Qed.
 
-Definition PProp_small(a b:PProp):Prop :=
-  ((exists x, b = PPimpl a x) \/ (exists x, b = PPimpl x a)) \/
-  ((exists x, b = PPconj a x) \/ (exists x, b = PPconj x a)) \/
-  ((exists x, b = PPdisj a x) \/ (exists x, b = PPdisj x a)).
+Inductive PProp_small(a b:PProp):Prop :=
+  | PPsmall_impl_l x: b = PPimpl a x -> PProp_small a b
+  | PPsmall_impl_r x: b = PPimpl x a -> PProp_small a b
+  | PPsmall_conj_l x: b = PPconj a x -> PProp_small a b
+  | PPsmall_conj_r x: b = PPconj x a -> PProp_small a b
+  | PPsmall_disj_l x: b = PPdisj a x -> PProp_small a b
+  | PPsmall_disj_r x: b = PPdisj x a -> PProp_small a b.
+
+Arguments PPsmall_impl_l [a] [b] x H.
+Arguments PPsmall_impl_r [a] [b] x H.
+Arguments PPsmall_conj_l [a] [b] x H.
+Arguments PPsmall_conj_r [a] [b] x H.
+Arguments PPsmall_disj_l [a] [b] x H.
+Arguments PPsmall_disj_r [a] [b] x H.
 
 Lemma PProp_small_wellfounded: well_founded PProp_small.
 Proof.
@@ -37,29 +47,19 @@ intros p.
 induction p.
 - exists.
   intros y Hy.
-  destruct Hy as [[Hy|Hy]|[[Hy|Hy]|[Hy|Hy]]];
-    destruct Hy as (z,Hz);
-    congruence.
+  destruct Hy as [z Hz|z Hz|z Hz|z Hz|z Hz|z Hz]; congruence.
 - exists.
   intros y Hy.
-  destruct Hy as [[Hy|Hy]|[[Hy|Hy]|[Hy|Hy]]];
-    destruct Hy as (z,Hz);
-    congruence.
+  destruct Hy as [z Hz|z Hz|z Hz|z Hz|z Hz|z Hz]; congruence.
 - exists.
   intros y Hy.
-  destruct Hy as [[Hy|Hy]|[[Hy|Hy]|[Hy|Hy]]];
-    destruct Hy as (z,Hz);
-    congruence.
+  destruct Hy as [z Hz|z Hz|z Hz|z Hz|z Hz|z Hz]; congruence.
 - exists.
   intros y Hy.
-  destruct Hy as [[Hy|Hy]|[[Hy|Hy]|[Hy|Hy]]];
-    destruct Hy as (z,Hz);
-    congruence.
+  destruct Hy as [z Hz|z Hz|z Hz|z Hz|z Hz|z Hz]; congruence.
 - exists.
   intros y Hy.
-  destruct Hy as [[Hy|Hy]|[[Hy|Hy]|[Hy|Hy]]];
-    destruct Hy as (z,Hz);
-    congruence.
+  destruct Hy as [z Hz|z Hz|z Hz|z Hz|z Hz|z Hz]; congruence.
 Qed.
 
 Inductive LJ_provable : list PProp -> PProp -> Prop :=
@@ -485,11 +485,9 @@ induction HPrR.
       apply LJ_contrN.
       LJ_reorder_antecedent (((KL1++KL2)++KL1)++(KL1++KL2)).
       apply HI_rank with (y:=P2) (n:=1).
-      - rewrite <-PrA.
-        left;right;exists P1; reflexivity.
+      - apply (PPsmall_impl_r _ (eq_sym PrA)).
       - apply HI_rank with (y:=P1) (n:=1).
-        + rewrite <-PrA.
-          left;left;exists P2; reflexivity.
+        + apply (PPsmall_impl_l _ (eq_sym PrA)).
         + apply IHHPrR1 with (n:=n).
           * exact PrB.
           * exact HPrL.
@@ -527,15 +525,13 @@ induction HPrR.
     {
       do 2 apply LJ_contrN.
       apply HI_rank with (y:=P2) (n:=1).
-      - rewrite <-PrA.
-        right;left;right;exists P1;reflexivity.
+      - apply (PPsmall_conj_r _ (eq_sym PrA)).
       - apply LJ_conj_elim_r with (P1:=P1).
         rewrite PrA.
         exact HPrL.
       - simpl; LJ_reorder_antecedent (KL1 ++ P2 :: KL1 ++ KL2).
         apply HI_rank with (y:=P1) (n:=1).
-        + rewrite <-PrA.
-          right;left;left;exists P2;reflexivity.
+        + apply (PPsmall_conj_l _ (eq_sym PrA)).
         + apply LJ_conj_elim_l with (P2:=P2).
           rewrite PrA.
           exact HPrL.
@@ -568,14 +564,12 @@ induction HPrR.
       apply LJ_disj_elim2_withcut with (P1:=P1) (P2:=P2).
       - intros PA LA1 LA2 HA1 HA2.
         apply HI_rank with (y:=P1) (n:=1).
-        + rewrite <-PrA.
-          right;right;left; exists P2; reflexivity.
+        + apply (PPsmall_disj_l _ (eq_sym PrA)).
         + exact HA1.
         + exact HA2.
       - intros PA LA1 LA2 HA1 HA2.
         apply HI_rank with (y:=P2) (n:=1).
-        + rewrite <-PrA.
-          right;right;right; exists P1; reflexivity.
+        + apply (PPsmall_disj_r _ (eq_sym PrA)).
         + exact HA1.
         + exact HA2.
       - rewrite PrA.

@@ -158,24 +158,6 @@ intros A target a1.
 apply (perm_takeit_4 _ (target::nil)).
 Qed.
 
-(* Ltac perm_simplify := app_normalize; repeat (
-  rewrite app_nil_r ||
-  match goal with
-  | [ |- Permutation ?L1 ?L1 ] => reflexivity
-  | [ |- Permutation (?A1++_) (?A1++_) ] => apply Permutation_app_head
-  | [ |- Permutation (?A1::_) (?A1::_) ] => apply perm_skip
-  | [ |- Permutation (?L1++_) _ ] => (
-      rewrite (perm_takeit_1 _ L1) ||
-      rewrite (perm_takeit_2 _ L1) ||
-      rewrite (perm_takeit_3 _ L1) ||
-      rewrite (perm_takeit_4 _ L1) )
-  | [ |- Permutation (?A1::_) _ ] => (
-      rewrite (perm_takeit_5 _ A1) ||
-      rewrite (perm_takeit_6 _ A1) ||
-      rewrite (perm_takeit_7 _ A1) ||
-      rewrite (perm_takeit_8 _ A1) )
-  end). *)
-
 Ltac perm_simplify := app_normalize; repeat (
   rewrite app_nil_r ||
   match goal with
