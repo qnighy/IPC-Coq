@@ -4,6 +4,7 @@ Require Import Coq.Relations.Relations.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Setoids.Setoid.
 Require Import Coq.Arith.Arith.
+Require Import omega.Omega.
 Require Import MyPermutations.
 Require Import PProp.
 Require Import DLJ.
@@ -67,7 +68,6 @@ split.
   rewrite ->HP.
   exact (DLI_perm P2 L2 L1 (Permutation_sym HL) H).
 Qed.
-
 
 Lemma DLI_weak: forall P1 P2 L1, DLI_provable L1 P2 -> DLI_provable (P1::L1) P2.
 Proof.
