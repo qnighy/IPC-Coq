@@ -661,3 +661,62 @@ rewrite app_nil_r.
 revert HPrL HPrR1 HPrR2.
 apply LJ_disj_elim2.
 Qed.
+
+Definition LJ_tauto:PProp -> Prop := LJ_provable nil.
+
+Lemma LJ_disjunction: forall P1 P2, LJ_tauto (PPdisj P1 P2) -> LJ_tauto P1 \/ LJ_tauto P2.
+Proof.
+unfold LJ_tauto.
+intros P1 P2 H.
+remember (@nil PProp) as L1 in H.
+remember (PPdisj P1 P2) as P3 in H.
+induction H.
+- apply IHLJ_provable.
+  + apply Permutation_nil.
+    rewrite H,HeqL1.
+    reflexivity.
+  + exact HeqP3.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- left.
+  replace P1 with P0 by congruence.
+  rewrite <-HeqL1.
+  exact H.
+- right.
+  replace P2 with P3 by congruence.
+  rewrite <-HeqL1.
+  exact H.
+Qed.
+
+Lemma LJ_consistent: ~LJ_tauto PPbot.
+Proof.
+unfold LJ_tauto.
+intros H.
+remember (@nil PProp) as L1 in H.
+remember (PPbot) as P1 in H.
+induction H.
+- apply IHLJ_provable.
+  + apply Permutation_nil.
+    rewrite H,HeqL1.
+    reflexivity.
+  + exact HeqP1.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+- congruence.
+Qed.
+
