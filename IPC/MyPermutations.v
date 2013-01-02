@@ -28,6 +28,42 @@ induction Ha.
   apply app_compat_perm_latter,Permutation_sym,Hb.
 Qed.
 
+Lemma Permutation_In_In: forall{A:Type} (x:A) (l1 l2:list A), Permutation l1 l2 -> In x l1 -> In x l2.
+Proof.
+intros A x l1 l2 HP H.
+induction HP.
+- exact H.
+- destruct H as [H|H].
+  + left.
+    exact H.
+  + right.
+    apply IHHP,H.
+- destruct H as [H|[H|H]].
+  + right.
+    left.
+    exact H.
+  + left.
+    exact H.
+  + right.
+    right.
+    exact H.
+- apply IHHP2,IHHP1,H.
+Qed.
+
+Instance In_compat_perm(A:Type)
+  (eq_dec: forall x y:A, {x=y} + {x<>y}):
+    Proper (eq ==> @Permutation A ==> iff) (@In A).
+Proof.
+unfold Proper,respectful.
+intros x1 x2 Hx l1 l2 Hl.
+rewrite Hx; clear x1 Hx.
+split.
+- apply Permutation_In_In,Hl.
+- apply Permutation_In_In.
+  symmetry.
+  exact Hl.
+Qed.
+
 Lemma app_normalize_1:
   forall(A:Type) (l1 l2 l3:list A),
     (l1 ++ l2) ++ l3 = l1 ++ (l2 ++ l3).
@@ -122,7 +158,7 @@ intros A target a1.
 apply (perm_takeit_4 _ (target::nil)).
 Qed.
 
-Ltac perm_simplify := app_normalize; repeat (
+(* Ltac perm_simplify := app_normalize; repeat (
   rewrite app_nil_r ||
   match goal with
   | [ |- Permutation ?L1 ?L1 ] => reflexivity
@@ -138,6 +174,25 @@ Ltac perm_simplify := app_normalize; repeat (
       rewrite (perm_takeit_6 _ A1) ||
       rewrite (perm_takeit_7 _ A1) ||
       rewrite (perm_takeit_8 _ A1) )
+  end). *)
+
+Ltac perm_simplify := app_normalize; repeat (
+  rewrite app_nil_r ||
+  match goal with
+  | [ |- Permutation ?L1 ?L1 ] => reflexivity
+  | [ |- Permutation (?A1++_) (?A1++_) ] => apply Permutation_app_head
+  | [ |- Permutation (?A1::_) (?A1::_) ] => apply perm_skip
+  | [ |- Permutation _ (?L1++_) ] => (
+      rewrite (perm_takeit_1 _ L1) at 1 ||
+      rewrite (perm_takeit_2 _ L1) at 1 ||
+      rewrite (perm_takeit_3 _ L1) at 1 ||
+      rewrite (perm_takeit_4 _ L1) at 1 )
+  | [ |- Permutation _ (?A1::_) ] => (
+      rewrite (perm_takeit_5 _ A1) at 1 ||
+      rewrite (perm_takeit_6 _ A1) at 1 ||
+      rewrite (perm_takeit_7 _ A1) at 1 ||
+      rewrite (perm_takeit_8 _ A1) at 1 )
+  | [ |- Permutation _ _ ] => fail
   end).
 
 Ltac perm :=
@@ -150,6 +205,14 @@ Lemma perm_test: forall(A:Type)
    (a b c d e f:A)
    (p q r s:list A),
      Permutation (a::q++c::(e::p++s)++r++d::r++f::b::q) ((p++c::q++r)++f::b::q++r++a::s++e::d::nil).
+Proof.
+intros.
+perm.
+Qed.
+
+Lemma perm_test2: forall(A:Type)
+   (a b:list A),
+     Permutation (a++b++b) (b++b++a).
 Proof.
 intros.
 perm.
