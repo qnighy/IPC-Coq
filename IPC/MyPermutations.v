@@ -197,19 +197,36 @@ Ltac perm :=
   | [ |- _ ] => fail "perm can't solve this system."
   end.
 
-Lemma perm_test: forall(A:Type)
-   (a b c d e f:A)
-   (p q r s:list A),
-     Permutation (a::q++c::(e::p++s)++r++d::r++f::b::q) ((p++c::q++r)++f::b::q++r++a::s++e::d::nil).
+Lemma PProp_perm_select:
+  forall(A:Type) (P1 P2:A) (L1 L2:list A),
+    Permutation (P1::L1) (P2::L2) ->
+      (
+        P1 = P2 /\ Permutation L1 L2
+      ) \/ (
+        exists L2',
+          Permutation L2 (P1::L2') /\
+          Permutation L1 (P2::L2')
+      ).
 Proof.
-intros.
-perm.
-Qed.
-
-Lemma perm_test2: forall(A:Type)
-   (a b:list A),
-     Permutation (a++b++b) (b++b++a).
-Proof.
-intros.
-perm.
+intros A P1 P2 L1 L2 HP.
+assert (HI:=in_eq P1 L1).
+rewrite HP in HI.
+destruct HI as [HI|HI].
+- left.
+  split.
+  + symmetry.
+    exact HI.
+  + rewrite HI in HP.
+    apply Permutation_cons_inv in HP.
+    exact HP.
+- right.
+  destruct (in_split _ _ HI) as (L2A,(L2B,HL2)).
+  exists (L2A++L2B).
+  split.
+  + rewrite HL2.
+    perm.
+  + apply Permutation_cons_inv with (a:=P1).
+    rewrite HP.
+    rewrite HL2.
+    perm.
 Qed.

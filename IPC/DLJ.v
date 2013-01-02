@@ -760,3 +760,22 @@ intros P1.
 apply LJ_DLJ_iff.
 Qed.
 
+Theorem DLJ_cut:
+  forall P1 P2 L1,
+    DLJ_provable L1 P1 ->
+    DLJ_provable (P1::L1) P2 ->
+    DLJ_provable L1 P2.
+Proof.
+intros P1 P2 L1.
+do 3 rewrite <-LJ_DLJ_iff.
+apply LJ_cut.
+Qed.
+
+Lemma DLJ_impl_elim:
+  forall P1 P2 L1,
+    DLJ_provable L1 (PPimpl P1 P2) -> DLJ_provable (P1::L1) P2.
+Proof.
+intros P1 P2 L1.
+do 2 rewrite <-LJ_DLJ_iff.
+apply LJ_impl_elim.
+Qed.

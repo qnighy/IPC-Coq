@@ -18,12 +18,12 @@ Definition multiset_ordering(L1 L2:list A):Prop :=
   exists LH LT1 LT2,
     (Permutation L1 (LH ++ LT1) /\
      Permutation L2 (LH ++ LT2)) /\
-    (exists PI:A, In PI LT2) /\
+    (LT2 <> nil) /\
     forall P1:A, In P1 LT1 ->
       exists P2:A, In P2 LT2 /\
         R P1 P2.
 
-Instance multiset_ordering_comp:
+Global Instance multiset_ordering_comp:
   Proper (@Permutation A ==> @Permutation A ==> iff)
     multiset_ordering.
 Proof.
@@ -69,141 +69,24 @@ split.
   exact Hy.
 Qed.
 
-Lemma maximal_exists_cont:
-  forall PP:Prop,
-    forall L,
-      (
-        L = nil \/
-        (exists a, In a L /\ forall b, In b L -> clos_trans _ R a b -> PP)
-      -> PP) -> PP.
-Proof.
-intros PP L.
-induction L.
-- intros H.
-  apply H.
-  left.
-  reflexivity.
-- intros H.
-  apply IHL.
-  clear IHL.
-  intros IHL'.
-  revert H.
-  destruct IHL' as [IHL'|(b,(HbA,HbB))].
-  + rewrite IHL'.
-    intros H.
-    apply H.
-    right.
-    exists a.
-    split.
-    * apply in_eq.
-    * intros c [Hc|[]] HR.
-      rewrite Hc in HR; clear Hc.
-      induction c using (well_founded_induction (wf_clos_trans _ _ R_wf)).
-      apply (H0 c); exact HR.
-  + assert (HabS: ((clos_trans A R a b \/ (clos_trans A R a b -> PP))->PP)->PP).
-    {
-      intros H.
-      apply H.
-      right.
-      intros HH.
-      apply H.
-      left.
-      exact HH.
-    }
-    intros H.
-    apply HabS.
-    intros HabS'.
-    clear HabS.
-    revert H.
-    assert (HbaS: ((clos_trans A R b a \/ (clos_trans A R b a -> PP))->PP)->PP).
-    {
-      intros H.
-      apply H.
-      right.
-      intros HH.
-      apply H.
-      left.
-      exact HH.
-    }
-    intros H.
-    apply HbaS.
-    intros HbaS'.
-    clear HbaS.
-    revert H.
-    destruct HbaS' as [HbaS|HbaS]; [destruct HabS' as [HabS|HabS]|].
-    * exfalso.
-      assert (HaS := t_trans _ _ _ _ _ HabS HbaS).
-      clear HabS HbaS.
-      induction a using (well_founded_ind (wf_clos_trans _ _ R_wf)).
-      apply (H a); exact HaS.
-    * intros H.
-      apply H.
-      clear H.
-      right.
-      exists a.
-      split.
-      { left; reflexivity. }
-      intros c [Hc|Hc].
-      {
-        rewrite Hc; clear Hc.
-        induction c using (well_founded_ind (wf_clos_trans _ _ R_wf)).
-        intros HH.
-        apply (H c); exact HH.
-      }
-      intros H.
-      apply (HbB c Hc).
-      apply t_trans with (y:=a); trivial.
-    * intros H.
-      apply H.
-      clear H.
-      right.
-      exists b.
-      split.
-      { right; exact HbA. }
-      intros c [Hc|Hc].
-      { rewrite <-Hc; exact HbaS. }
-      apply HbB,Hc.
-Qed.
-
 Theorem multiset_ordering_wf: well_founded multiset_ordering.
 Proof.
 intros KL.
-remember (length KL) as n.
-revert KL Heqn.
-induction n.
-- intros KL HKL.
-  destruct KL; [clear HKL|simpl in HKL; congruence].
-  exists.
-  intros L (LH,(LT1,(LT2,((HL1,HL2),((PI,HPI),HLA))))).
-  exfalso.
-  change (In PI nil).
-  rewrite HL2.
-  rewrite in_app_iff.
-  right.
-  exact HPI.
-- intros KL' Heqn.
-  apply maximal_exists_cont with (L:=KL').
-  intros [IHKL|(a,(HaKL,Ha_max'))].
-  { rewrite IHKL in Heqn; simpl in Heqn; congruence. }
-  destruct (in_split _ _ HaKL) as (KL1,(KL2,HKLS)).
-  assert (HKLS' : Permutation KL' (a::KL1++KL2)) by (rewrite HKLS; perm).
-  clear HKLS.
-  rewrite HKLS' in Heqn |- *.
-  simpl in Heqn; apply eq_add_S in Heqn.
-  clear Ha_max'.
-  remember (KL1 ++ KL2) as KL.
-  clear KL' KL1 KL2 HaKL HKLS' HeqKL.
-  assert (IHKL := IHn _ Heqn).
-  clear n IHn Heqn.
-
-  revert KL IHKL.
+induction KL.
+- exists.
+  intros L (LH,(LT1,(LT2,((HL1,HL2),(HLI,HLA))))).
+  apply Permutation_nil in HL2.
+  apply app_eq_nil in HL2.
+  destruct HL2 as (_,HL2).
+  congruence.
+- revert KL IHKL.
   induction a as (a,IHa) using (well_founded_ind R_wf).
   intros KL IHKL.
   remember IHKL as IHKL'; clear HeqIHKL'.
   induction IHKL as (KL,IHKL,IHIHKL).
   exists.
   intros L IHL.
-  destruct (id IHL) as (LH,(LT1,(LT2,((HL1,HL2),((PI,HPI),HLA))))).
+  destruct (id IHL) as (LH,(LT1,(LT2,((HL1,HL2),(HLI,HLA))))).
   assert (Ha := in_eq a KL).
   rewrite HL2 in Ha.
   rewrite in_app_iff in Ha.
@@ -226,7 +109,7 @@ induction n.
       split.
       { split; reflexivity. }
       split.
-      { exists PI; exact HPI. }
+      { exact HLI. }
       exact HLA.
     * apply IHKL.
       exists LH',LT1,LT2.
@@ -236,15 +119,15 @@ induction n.
           + reflexivity.
           + exact HL2.
         - split.
-          + exists PI.
-            exact HPI.
+          + exact HLI.
           + exact HLA.
       }
   + destruct (in_split _ _ Ha) as (LT2A,(LT2B,HLT2)).
     assert (HLT2' : Permutation LT2 (a :: LT2A ++ LT2B)) by (rewrite HLT2; perm).
     remember (LT2A ++ LT2B) as LT2'.
     clear LT2A LT2B Ha HLT2 HeqLT2'.
-    rewrite HLT2' in HL2,HPI.
+    rewrite HLT2' in HL2.
+    clear HLI.
     assert (HLA2:
         forall P1:A, In P1 LT1 -> exists P2:A, In P2 (a::LT2') /\ R P1 P2).
     {
@@ -261,7 +144,6 @@ induction n.
         with       (a :: LH ++ LT2')
         using relation (@Permutation A) in HL2; [|perm].
     apply Permutation_cons_inv in HL2.
-    clear PI HPI.
 
     assert (HLA3:
         exists LT1H LT1T,
@@ -357,8 +239,7 @@ induction n.
                   reflexivity.
                 + exact HL2.
               - split.
-                + exists a0.
-                  apply in_eq.
+                + congruence.
                 + intros P1 [].
             }
         }
@@ -371,12 +252,8 @@ induction n.
         - split.
           + destruct LT1T as [|LT1Th LT1T].
             * congruence.
-            * destruct (HLT1T LT1Th) as (P2,(HP2A,HP2B)).
-              {
-                apply in_eq.
-              }
-              exists P2.
-              exact HP2A.
+            * destruct LT2' as [|LT2h' LT2']; [|congruence].
+              destruct (HLT1T _ (in_eq _ _)) as (P2,([],_)).
           + intros P1 HP1.
             apply HLT1T.
             exact HP1.
