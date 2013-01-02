@@ -1178,6 +1178,70 @@ destruct (PProp_dec P1 a) as [HP1e|HP1n].
   apply perm_swap.
 Qed.
 
+Fixpoint PProp_list_remove(P1:PProp) (L1:list PProp):list PProp :=
+  match L1 with
+  | nil => nil
+  | L1h :: L1T =>
+      if PProp_dec P1 L1h then
+        L1T
+      else
+        L1h :: PProp_list_remove P1 L1T
+  end.
+
+Lemma PProp_list_remove_cons:
+  forall P1 L1, PProp_list_remove P1 (P1::L1) = L1.
+Proof.
+intros P1 L1.
+simpl.
+destruct (PProp_dec P1 P1) as [|Hneq].
+- reflexivity.
+- congruence.
+Qed.
+
+Lemma PProp_list_remove_in:
+  forall P1 L1, In P1 L1 -> Permutation L1 (P1::PProp_list_remove P1 L1).
+Proof.
+intros P1 L1.
+induction L1.
+{ intros []. }
+unfold PProp_list_remove.
+destruct (PProp_dec P1 a) as [Heq|Hneq].
+- rewrite <-Heq.
+  intros _.
+  reflexivity.
+- intros [H|H].
+  { congruence. }
+  rewrite perm_swap.
+  apply Permutation_cons.
+  apply IHL1.
+  apply H.
+Qed.
+
+Instance PProp_list_remove_compat:
+  Proper (eq ==> @Permutation PProp ==> @Permutation PProp) PProp_list_remove.
+Proof.
+unfold Proper,respectful.
+intros P1 P HP.
+rewrite HP; clear P1 HP.
+intros L1 L2 HL.
+induction HL.
+- reflexivity.
+- simpl.
+  destruct (PProp_dec P x).
+  + exact HL.
+  + apply Permutation_cons.
+    exact IHHL.
+- simpl.
+  destruct (PProp_dec P x) as [HXeq|HXneq];
+  destruct (PProp_dec P y) as [HYeq|HYneq].
+  + rewrite <-HXeq,<-HYeq.
+    reflexivity.
+  + reflexivity.
+  + reflexivity.
+  + apply perm_swap.
+- rewrite IHHL1,IHHL2.
+  reflexivity.
+Qed.
 
 Lemma DLI_dec:
   forall P1 L1, {DLI_provable L1 P1} + {~DLI_provable L1 P1}.
@@ -1212,47 +1276,161 @@ destruct (in_dec PProp_dec P1 L1) as [axiom_exist|axiom_nonexist].
   apply DLI_axiom.
 }
 
-destruct (in_dec PProp_dec PPbot L1) as [bot_exist|bot_nonexist].
-{
-  left.
-  apply PProp_in_get in bot_exist.
-  destruct bot_exist as (L1X,HL1X).
-  rewrite HL1X.
-  apply DLI_exfalso.
-}
-
 destruct (
     find_list2 _ (fun a =>
       match a with
+      | PPbot => True
       | PPimpl (PPatom b) PA => In (PPatom b) L1 /\
-          exists L2,
-            Permutation L1 (PPimpl (PPatom b) PA::PPatom b::L2) /\
-            DLI_provable (PA::PPatom b::L2) P1
+            DLI_provable (PA::PPatom b::
+              PProp_list_remove (PPatom b) (
+                PProp_list_remove (PPimpl (PPatom b) PA) L1
+              )
+            ) P1
+      | PPimpl (PPimpl PB PC) PA =>
+            DLI_provable (PPimpl PC PA::
+              PProp_list_remove (PPimpl (PPimpl PB PC) PA) L1
+            ) (PPimpl PB PC) /\
+            DLI_provable (PA::
+              PProp_list_remove (PPimpl (PPimpl PB PC) PA) L1
+            ) P1
+      | PPimpl (PPconj PB PC) PA =>
+            DLI_provable (PPimpl PB (PPimpl PC PA)::
+              PProp_list_remove (PPimpl (PPconj PB PC) PA) L1
+            ) P1
+      | PPimpl (PPdisj PB PC) PA =>
+            DLI_provable (PPimpl PB PA::PPimpl PC PA::
+              PProp_list_remove (PPimpl (PPdisj PB PC) PA) L1
+            ) P1
+      | PPconj PA PB =>
+            DLI_provable (PA::PB::
+              PProp_list_remove (PPconj PA PB) L1
+            ) P1
+      | PPdisj PA PB =>
+            DLI_provable (PA::
+              PProp_list_remove (PPdisj PA PB) L1
+            ) P1 /\
+            DLI_provable (PB::
+              PProp_list_remove (PPdisj PA PB) L1
+            ) P1
       | _ => False
       end
-    ) L1) as [(a,(HaA,HaB))|antecedent_impl_atom_nonexist].
+    ) L1) as [(a,(HaA,HaB))|antecedent_nonexist].
 {
   intros a Ha.
-  destruct a as [|A1|[|A1|P2 P3|P2 P3|P2 P3] P4|P2 P3|P2 P3];
-    try (right; intros H; exact H; fail).
-  apply PProp_in_get in Ha.
-  destruct Ha as (L2,HL2).
-  
-  destruct (in_dec PProp_dec (PPatom A1) L2) as [Hin|Hnin].
-  - apply PProp_in_get in Hin.
-    destruct Hin as (L3,HL3).
-    destruct (IH P1 (P4::PPatom A1::L3)) as [HPr|HPrN].
+  destruct a as [|A1|[|A1|P2 P3|P2 P3|P2 P3] P4|P2 P3|P2 P3].
+  - left; exists.
+  - right; tauto.
+  - right; tauto.
+  - destruct (in_dec PProp_dec (PPatom A1)
+      (PProp_list_remove (PPimpl (PPatom A1) P4) L1)) as [Hin|Hnin].
+    + destruct (IH P1 (P4::PPatom A1::
+        PProp_list_remove (PPatom A1)
+          (PProp_list_remove (PPimpl (PPatom A1) P4) L1))) as [HPr|HPrN].
+      {
+        rewrite <-(PProp_list_remove_in _ _ Hin).
+        rewrite (PProp_list_remove_in _ _ Ha) at 2.
+        exists (P1::PProp_list_remove (PPimpl (PPatom A1) P4) L1),
+            (P4::nil),(PPimpl (PPatom A1) P4::nil).
+        split.
+        { split; perm. }
+        split.
+        { congruence. }
+        intros P0 [HP0|[]].
+        rewrite <-HP0; clear P0 HP0.
+        exists (PPimpl (PPatom A1) P4).
+        split.
+        { apply in_eq. }
+        unfold ltof.
+        simpl.
+        omega.
+      }
+      * left.
+        split.
+        {
+          rewrite (PProp_list_remove_in _ _ Ha).
+          right.
+          exact Hin.
+        }
+        exact HPr.
+      * right.
+        intros (_,HB).
+        contradict HPrN.
+        exact HB.
+    + right.
+      intros (HA,_).
+      contradict Hnin.
+      rewrite (PProp_list_remove_in _ _ Ha) in HA.
+      destruct HA as [HA|HA].
+      * congruence.
+      * exact HA.
+  - destruct (IH (PPimpl P2 P3) (PPimpl P3 P4::
+        PProp_list_remove (PPimpl (PPimpl P2 P3) P4) L1)) as [HPrA|HPrNA].
     {
-      rewrite HL2,HL3.
-      exists (P1::PPatom A1::L3),(P4::nil),(PPimpl (PPatom A1) P4::nil).
+      rewrite (PProp_list_remove_in _ _ Ha) at 2.
+      exists (PProp_list_remove (PPimpl (PPimpl P2 P3) P4) L1),
+          (PPimpl P2 P3::PPimpl P3 P4::nil),(PPimpl (PPimpl P2 P3) P4::P1::nil).
+      split.
+      { split; perm. }
+      split.
+      { congruence. }
+      intros P0 [HP0|[HP0|[]]].
+      - rewrite <-HP0; clear P0 HP0.
+        exists (PPimpl (PPimpl P2 P3) P4).
+        split.
+        { apply in_eq. }
+        unfold ltof.
+        simpl.
+        omega.
+      - rewrite <-HP0; clear P0 HP0.
+        exists (PPimpl (PPimpl P2 P3) P4).
+        split.
+        { apply in_eq. }
+        unfold ltof.
+        simpl.
+        omega.
+    }
+    + destruct (IH P1 (P4::
+          PProp_list_remove (PPimpl (PPimpl P2 P3) P4) L1)) as [HPrB|HPrNB].
+      {
+        rewrite (PProp_list_remove_in _ _ Ha) at 2.
+        exists (P1::PProp_list_remove (PPimpl (PPimpl P2 P3) P4) L1),
+            (P4::nil),(PPimpl (PPimpl P2 P3) P4::nil).
+        split.
+        { split; perm. }
+        split.
+        { congruence. }
+        intros P0 [HP0|[]].
+        rewrite <-HP0; clear P0 HP0.
+        exists (PPimpl (PPimpl P2 P3) P4).
+        split.
+        { apply in_eq. }
+        unfold ltof.
+        simpl.
+        omega.
+      }
+      * left.
+        exact (conj HPrA HPrB).
+      * right.
+        intros (_,HPrB).
+        contradict HPrNB.
+        exact HPrB.
+    + right.
+      intros (HPrA,_).
+      contradict HPrNA.
+      exact HPrA.
+  - destruct (IH P1 (PPimpl P2 (PPimpl P3 P4)::
+        PProp_list_remove (PPimpl (PPconj P2 P3) P4) L1)) as [HPr|HPrN].
+    {
+      rewrite (PProp_list_remove_in _ _ Ha) at 2.
+      exists (P1::PProp_list_remove (PPimpl (PPconj P2 P3) P4) L1),
+          (PPimpl P2 (PPimpl P3 P4)::nil),(PPimpl (PPconj P2 P3) P4::nil).
       split.
       { split; perm. }
       split.
       { congruence. }
       intros P0 [HP0|[]].
-      rewrite <-HP0.
-      clear P0 HP0.
-      exists (PPimpl (PPatom A1) P4).
+      rewrite <-HP0; clear P0 HP0.
+      exists (PPimpl (PPconj P2 P3) P4).
       split.
       { apply in_eq. }
       unfold ltof.
@@ -1260,46 +1438,293 @@ destruct (
       omega.
     }
     + left.
-      split.
-      {
-        rewrite HL2,HL3.
-        right.
-        apply in_eq.
-      }
-      exists L3.
-      split.
-      {
-        rewrite HL2,HL3.
-        reflexivity.
-      }
       exact HPr.
     + right.
-      intros (HA,(L3X,(HB,HC))).
-      contradict HPrN.
-      rewrite HL2,HL3 in HB.
-      apply Permutation_cons_inv in HB.
-      apply Permutation_cons_inv in HB.
-      rewrite HB.
-      exact HC.
-  - right.
-    intros (HA,_).
-    contradict Hnin.
-    rewrite HL2 in HA.
-    destruct HA as [HA|HA].
-    + congruence.
-    + exact HA.
+      exact HPrN.
+  - destruct (IH P1 (PPimpl P2 P4::PPimpl P3 P4::
+        PProp_list_remove (PPimpl (PPdisj P2 P3) P4) L1)) as [HPr|HPrN].
+    {
+      rewrite (PProp_list_remove_in _ _ Ha) at 2.
+      exists (P1::PProp_list_remove (PPimpl (PPdisj P2 P3) P4) L1),
+          (PPimpl P2 P4::PPimpl P3 P4::nil),(PPimpl (PPdisj P2 P3) P4::nil).
+      split.
+      { split; perm. }
+      split.
+      { congruence. }
+      intros P0 [HP0|[HP0|[]]].
+      - rewrite <-HP0; clear P0 HP0.
+        exists (PPimpl (PPdisj P2 P3) P4).
+        split.
+        { apply in_eq. }
+        unfold ltof.
+        simpl.
+        omega.
+      - rewrite <-HP0; clear P0 HP0.
+        exists (PPimpl (PPdisj P2 P3) P4).
+        split.
+        { apply in_eq. }
+        unfold ltof.
+        simpl.
+        omega.
+    }
+    + left.
+      exact HPr.
+    + right.
+      exact HPrN.
+  - destruct (IH P1 (P2::P3::
+        PProp_list_remove (PPconj P2 P3) L1)) as [HPr|HPrN].
+    {
+      rewrite (PProp_list_remove_in _ _ Ha) at 2.
+      exists (P1::PProp_list_remove (PPconj P2 P3) L1),
+          (P2::P3::nil),(PPconj P2 P3::nil).
+      split.
+      { split; perm. }
+      split.
+      { congruence. }
+      intros P0 [HP0|[HP0|[]]].
+      - rewrite <-HP0; clear P0 HP0.
+        exists (PPconj P2 P3).
+        split.
+        { apply in_eq. }
+        unfold ltof.
+        simpl.
+        omega.
+      - rewrite <-HP0; clear P0 HP0.
+        exists (PPconj P2 P3).
+        split.
+        { apply in_eq. }
+        unfold ltof.
+        simpl.
+        omega.
+    }
+    + left.
+      exact HPr.
+    + right.
+      exact HPrN.
+  - destruct (IH P1 (P2::
+        PProp_list_remove (PPdisj P2 P3) L1)) as [HPrA|HPrNA].
+    {
+      rewrite (PProp_list_remove_in _ _ Ha) at 2.
+      exists (P1::PProp_list_remove (PPdisj P2 P3) L1),
+          (P2::nil),(PPdisj P2 P3::nil).
+      split.
+      { split; perm. }
+      split.
+      { congruence. }
+      intros P0 [HP0|[]].
+      rewrite <-HP0; clear P0 HP0.
+      exists (PPdisj P2 P3).
+      split.
+      { apply in_eq. }
+      unfold ltof.
+      simpl.
+      omega.
+    }
+    + destruct (IH P1 (P3::
+          PProp_list_remove (PPdisj P2 P3) L1)) as [HPrB|HPrNB].
+      {
+        rewrite (PProp_list_remove_in _ _ Ha) at 2.
+        exists (P1::PProp_list_remove (PPdisj P2 P3) L1),
+            (P3::nil),(PPdisj P2 P3::nil).
+        split.
+        { split; perm. }
+        split.
+        { congruence. }
+        intros P0 [HP0|[]].
+        rewrite <-HP0; clear P0 HP0.
+        exists (PPdisj P2 P3).
+        split.
+        { apply in_eq. }
+        unfold ltof.
+        simpl.
+        omega.
+      }
+      * left.
+        exact (conj HPrA HPrB).
+      * right.
+        intros (_,HPrB).
+        contradict HPrNB.
+        exact HPrB.
+    + right.
+      intros (HPrA,_).
+      contradict HPrNA.
+      exact HPrA.
 }
 {
   left.
-  destruct a as [|A1|[|A1|P2 P3|P2 P3|P2 P3] P4|P2 P3|P2 P3];
-    try (contradict HaB; fail).
-  destruct HaB as (HaBA,(L2,(HaBB,HaBC))).
-  rewrite HaBB.
-  apply DLI_impl_antecedent_atom.
-  exact HaBC.
+  destruct a as [|A1|[|A1|P2 P3|P2 P3|P2 P3] P4|P2 P3|P2 P3].
+  - rewrite (PProp_list_remove_in _ _ HaA).
+    apply DLI_exfalso.
+  - contradict HaB.
+  - contradict HaB.
+  - destruct HaB as (HaBA,HaBB).
+    rewrite (PProp_list_remove_in _ _ HaA).
+    rewrite (PProp_list_remove_in _ _ HaA) in HaBA.
+    destruct HaBA as [HaBA|HaBA].
+    { congruence. }
+    rewrite (PProp_list_remove_in _ _ HaBA).
+    apply DLI_impl_antecedent_atom.
+    exact HaBB.
+  - destruct HaB as (HaBA,HaBB).
+    rewrite (PProp_list_remove_in _ _ HaA).
+    apply DLI_impl_antecedent_impl.
+    + exact HaBA.
+    + exact HaBB.
+  - rewrite (PProp_list_remove_in _ _ HaA).
+    apply DLI_impl_antecedent_conj.
+    exact HaB.
+  - rewrite (PProp_list_remove_in _ _ HaA).
+    apply DLI_impl_antecedent_disj.
+    exact HaB.
+  - rewrite (PProp_list_remove_in _ _ HaA).
+    apply DLI_conj_antecedent.
+    exact HaB.
+  - destruct HaB as (HaBA,HaBB).
+    rewrite (PProp_list_remove_in _ _ HaA).
+    apply DLI_disj_antecedent.
+    + exact HaBA.
+    + exact HaBB.
 }
-
-(* ... *)
+assert (succedent_dec:
+  {
+    match P1 with
+    | PPimpl P1A P1B => DLI_provable (P1A::L1) P1B
+    | PPconj P1A P1B => DLI_provable L1 P1A /\ DLI_provable L1 P1B
+    | PPdisj P1A P1B => DLI_provable L1 P1A \/ DLI_provable L1 P1B
+    | _ => False
+    end
+  } + {~
+    match P1 with
+    | PPimpl P1A P1B => DLI_provable (P1A::L1) P1B
+    | PPconj P1A P1B => DLI_provable L1 P1A /\ DLI_provable L1 P1B
+    | PPdisj P1A P1B => DLI_provable L1 P1A \/ DLI_provable L1 P1B
+    | _ => False
+    end
+  }).
+{
+  destruct P1 as [|A1|P1A P1B|P1A P1B|P1A P1B].
+  - right; tauto.
+  - right; tauto.
+  - apply IH.
+    exists L1,(P1B::P1A::nil),(PPimpl P1A P1B::nil).
+    split.
+    { split; perm. }
+    split.
+    { congruence. }
+    intros P0 [HP0|[HP0|[]]].
+    + rewrite <-HP0; clear P0 HP0.
+      exists (PPimpl P1A P1B).
+      split.
+      { apply in_eq. }
+      unfold ltof.
+      simpl.
+      omega.
+    + rewrite <-HP0; clear P0 HP0.
+      exists (PPimpl P1A P1B).
+      split.
+      { apply in_eq. }
+      unfold ltof.
+      simpl.
+      omega.
+  - destruct (IH P1A L1) as [HPrA|HPrNA].
+    {
+      exists L1,(P1A::nil),(PPconj P1A P1B::nil).
+      split.
+      { split; perm. }
+      split.
+      { congruence. }
+      intros P0 [HP0|[]].
+      rewrite <-HP0; clear P0 HP0.
+      exists (PPconj P1A P1B).
+      split.
+      { apply in_eq. }
+      unfold ltof.
+      simpl.
+      omega.
+    }
+    + destruct (IH P1B L1) as [HPrB|HPrNB].
+      {
+        exists L1,(P1B::nil),(PPconj P1A P1B::nil).
+        split.
+        { split; perm. }
+        split.
+        { congruence. }
+        intros P0 [HP0|[]].
+        rewrite <-HP0; clear P0 HP0.
+        exists (PPconj P1A P1B).
+        split.
+        { apply in_eq. }
+        unfold ltof.
+        simpl.
+        omega.
+      }
+      * left.
+        exact (conj HPrA HPrB).
+      * right.
+        intros (_,HPrB).
+        apply HPrNB,HPrB.
+    + right.
+      intros (HPrA,_).
+      apply HPrNA,HPrA.
+  - destruct (IH P1A L1) as [HPrA|HPrNA].
+    {
+      exists L1,(P1A::nil),(PPdisj P1A P1B::nil).
+      split.
+      { split; perm. }
+      split.
+      { congruence. }
+      intros P0 [HP0|[]].
+      rewrite <-HP0; clear P0 HP0.
+      exists (PPdisj P1A P1B).
+      split.
+      { apply in_eq. }
+      unfold ltof.
+      simpl.
+      omega.
+    }
+    + left.
+      left.
+      exact HPrA.
+    + destruct (IH P1B L1) as [HPrB|HPrNB].
+      {
+        exists L1,(P1B::nil),(PPdisj P1A P1B::nil).
+        split.
+        { split; perm. }
+        split.
+        { congruence. }
+        intros P0 [HP0|[]].
+        rewrite <-HP0; clear P0 HP0.
+        exists (PPdisj P1A P1B).
+        split.
+        { apply in_eq. }
+        unfold ltof.
+        simpl.
+        omega.
+      }
+      * left.
+        right.
+        exact HPrB.
+      * right.
+        intros [HPrA|HPrB]; contradiction.
+}
+destruct succedent_dec as [succedent_exist|succedent_nonexist].
+{
+  left.
+  destruct P1.
+  - contradict succedent_exist.
+  - contradict succedent_exist.
+  - apply DLI_impl_succedent.
+    exact succedent_exist.
+  - destruct succedent_exist as (HPrL,HPrR).
+    apply DLI_conj_succedent.
+    + exact HPrL.
+    + exact HPrR.
+  - destruct succedent_exist as [HPr|HPr].
+    + apply DLI_disj_succedent_l.
+      exact HPr.
+    + apply DLI_disj_succedent_r.
+      exact HPr.
+}
 right.
 intros HPr.
 clear IH.
@@ -1322,925 +1747,68 @@ induction HPr as
     contradict axiom_nonexist.
     rewrite <-HPerm.
     exact H.
-  + intros H.
-    contradict bot_nonexist.
-    rewrite <-HPerm.
-    exact H.
   + intros a HaA HaB.
-    apply (antecedent_impl_atom_nonexist a).
-    * rewrite <-HPerm.
+    apply (antecedent_nonexist a).
+    {
+      rewrite <-HPerm.
       exact HaA.
-    * destruct a as [|A1|[|A1|P2 P3|P2 P3|P2 P3] P4|P2 P3|P2 P3];
-          try (contradict HaB; fail).
-      destruct HaB as (HaBA,(L3,(HaBB,HaBC))).
-      split.
-      { rewrite <-HPerm; exact HaBA. }
-      exists L3.
-      split.
-      { rewrite <-HPerm; exact HaBB. }
-      exact HaBC.
+    }
+    destruct a as [|A1|[|A1|P2 P3|P2 P3|P2 P3] P4|P2 P3|P2 P3];
+      (try rewrite <-HPerm; exact HaB).
+  + intros H.
+    contradict succedent_nonexist.
+    destruct P1; (try rewrite <-HPerm; exact H).
 - contradict axiom_nonexist.
   apply in_eq.
-- contradict bot_nonexist.
-  apply in_eq.
-- apply (antecedent_impl_atom_nonexist (PPimpl (PPatom A1) P1)).
-  { apply in_eq. }
+- apply (antecedent_nonexist _ (in_eq _ _)).
+  exists.
+- apply (antecedent_nonexist _ (in_eq _ _)).
   split.
   { right; apply in_eq. }
-  exists L1.
-  split.
-  { reflexivity. }
+  rewrite PProp_list_remove_cons.
+  rewrite PProp_list_remove_cons.
   exact HPr.
--
--
--
--
--
--
--
--
--
+- apply (antecedent_nonexist _ (in_eq _ _)).
+  split.
+  + rewrite PProp_list_remove_cons.
+    exact HPrL.
+  + rewrite PProp_list_remove_cons.
+    exact HPr1.
+- apply (antecedent_nonexist _ (in_eq _ _)).
+  rewrite PProp_list_remove_cons.
+  exact HPr.
+- apply (antecedent_nonexist _ (in_eq _ _)).
+  rewrite PProp_list_remove_cons.
+  exact HPr.
+- apply succedent_nonexist.
+  exact HPr.
+- apply (antecedent_nonexist _ (in_eq _ _)).
+  rewrite PProp_list_remove_cons.
+  exact HPr.
+- apply succedent_nonexist.
+  exact (conj HPrL HPr1).
+- apply (antecedent_nonexist _ (in_eq _ _)).
+  rewrite PProp_list_remove_cons.
+  exact (conj HPrL HPr1).
+- apply succedent_nonexist.
+  left.
+  exact HPr.
+- apply succedent_nonexist.
+  right.
+  exact HPr.
 Qed.
 
-
-Lemma DLI_dec:
-  forall P1 L1, {DLI_provable L1 P1} + {~DLI_provable L1 P1}.
+Theorem LJ_dec:
+  forall P1 L1, {LJ.LJ_provable L1 P1} + {~LJ.LJ_provable L1 P1}.
 Proof.
 intros P1 L1.
-remember (P1::L1) as L2.
-revert P1 L1 HeqL2.
-induction L2 as (L2,IHL2) using
-    (well_founded_induction
-      (multiset_ordering_wf _ _
-        (well_founded_ltof _ DLI_prop_weight))).
-intros P1 L1 HeqL2.
-rewrite HeqL2 in IHL2.
-clear L2 HeqL2.
-assert (IH:
-  forall P1' L1', 
-    multiset_ordering PProp (ltof PProp DLI_prop_weight) (P1'::L1') (P1::L1) ->
-    {DLI_provable L1' P1'} + {~DLI_provable L1' P1'}).
-{
-  intros P1' L1' H.
-  apply (IHL2 (P1'::L1') H).
-  reflexivity.
-}
-clear IHL2.
-
-
-destruct (in_dec PProp_dec P1 L1) as [axiom_exist|axiom_nonexist].
-{
-  left.
-  apply PProp_in_get in axiom_exist.
-  destruct axiom_exist as (L1X,HL1X).
-  rewrite HL1X.
-  apply DLI_axiom.
-}
-
-destruct (in_dec PProp_dec PPbot L1) as [bot_exist|bot_nonexist].
-{
-  left.
-  apply PProp_in_get in bot_exist.
-  destruct bot_exist as (L1X,HL1X).
-  rewrite HL1X.
-  apply DLI_exfalso.
-}
-
-destruct (
-    find_list _ (fun a =>
-      match a with
-      | PPimpl (PPatom b) _ => In (PPatom b) L1
-      | _ => False
-      end
-    ) L1) as [(a,(HaA,HaB))|antecedent_nonexist].
-{
-  intros a.
-  destruct a as [|A1|[|A1|P2 P3|P2 P3|P2 P3] P4|P2 P3|P2 P3];
-    try (right; intros H; exact H; fail).
-  apply in_dec.
-  apply PProp_dec.
-}
-{
-  destruct a as [|A1|[|A1|P2 P3|P2 P3|P2 P3] P4|P2 P3|P2 P3];
-    try (contradict HaB; fail).
-  apply PProp_in_get in HaA.
-    destruct HaA as (L1X,HL1X).
-    rewrite HL1X in HaB.
-    assert (HaB':In (PPatom A1) L1X).
-    { destruct HaB as [HaB|HaB]; [congruence|exact HaB]. }
-    apply PProp_in_get in HaB'.
-    destruct HaB' as (L1Y,HL1Y).
-    rewrite HL1Y in HL1X.
-    clear L1X HaB HL1Y.
-    destruct (IH P1 (P4::PPatom A1::L1Y)) as [HPr|HPrN].
-    + rewrite HL1X.
-      exists (P1::PPatom A1::L1Y),(P4::nil),(PPimpl (PPatom A1) P4::nil).
-      split.
-      { split; perm. }
-      split.
-      { congruence. }
-      intros P0 [HP0|[]].
-      rewrite <-HP0.
-      clear P0 HP0.
-      exists (PPimpl (PPatom A1) P4).
-      split.
-      { apply in_eq. }
-      unfold ltof.
-      simpl.
-      omega.
-    + left.
-      rewrite HL1X.
-    +
-}
-
-destruct (
-    find_list _ (fun a =>
-      match a with
-      | PPbot => True
-      | PPimpl (PPatom b) _ => In (PPatom b) L1
-      | PPimpl _ _ => True
-      | PPconj _ _ => True
-      | PPdisj _ _ => True
-      | _ => False
-      end
-    ) L1) as [(a,(HaA,HaB))|antecedent_nonexist].
-{
-  intros a.
-  destruct a as [|A1|[|A1|P2 P3|P2 P3|P2 P3] P4|P2 P3|P2 P3].
-  - left; exists.
-  - right; tauto.
-  - left; exists.
-  - apply in_dec.
-    apply PProp_dec.
-  - left; exists.
-  - left; exists.
-  - left; exists.
-  - left; exists.
-  - left; exists.
-}
-{
-  destruct a as [|A1|[|A1|P2 P3|P2 P3|P2 P3] P4|P2 P3|P2 P3].
-  - left.
-    apply PProp_in_get in HaA.
-    destruct HaA as (L1X,HL1X).
-    rewrite HL1X.
-    apply DLI_exfalso.
-  - contradict HaB.
-  - apply PProp_in_get in HaA.
-    destruct HaA as (L1X,HL1X).
-    destruct (IH P1 L1X) as [HPr|HPrN].
-    + rewrite HL1X.
-      exists (P1::L1X),nil,(PPimpl PPbot P4::nil).
-      split.
-      { split; perm. }
-      split.
-      { congruence. }
-      intros P0 [].
-    + left.
-      rewrite HL1X.
-      apply DLI_weak.
-      exact HPr.
-    + right.
-      contradict HPrN.
-      rewrite <-DLJ_DLI_iff.
-      apply DLJ_cut with (P1:=PPimpl PPbot P4).
-      {
-        apply DLJ_impl_succedent.
-        apply DLJ_exfalso.
-      }
-      rewrite DLJ_DLI_iff.
-      rewrite <-HL1X.
-      exact HPrN.
-  - apply PProp_in_get in HaA.
-    destruct HaA as (L1X,HL1X).
-    rewrite HL1X in HaB.
-    assert (HaB':In (PPatom A1) L1X).
-    { destruct HaB as [HaB|HaB]; [congruence|exact HaB]. }
-    apply PProp_in_get in HaB'.
-    destruct HaB' as (L1Y,HL1Y).
-    rewrite HL1Y in HL1X.
-    clear L1X HaB HL1Y.
-    destruct (IH P1 (P4::PPatom A1::L1Y)) as [HPr|HPrN].
-    + rewrite HL1X.
-      exists (P1::PPatom A1::L1Y),(P4::nil),(PPimpl (PPatom A1) P4::nil).
-      split.
-      { split; perm. }
-      split.
-      { congruence. }
-      intros P0 [HP0|[]].
-      rewrite <-HP0.
-      clear P0 HP0.
-      exists (PPimpl (PPatom A1) P4).
-      split.
-      { apply in_eq. }
-      unfold ltof.
-      simpl.
-      omega.
-    + left.
-      rewrite HL1X.
-    +
-  -
-  -
-  -
-  -
-  -
-}
-
-
-destruct (in_dec PProp_dec PPbot L1) as [exfalso_exist|exfalso_nonexist].
-{
-  left.
-  apply in_split in exfalso_exist.
-  destruct exfalso_exist as (L1A,(L1B,HL1)).
-  rewrite HL1.
-  DLI_reorder_antecedent (PPbot::L1A++L1B).
-  apply DLI_exfalso.
-}
-destruct (
+destruct (DLI_dec P1 L1) as [HPr|HPrN].
+- left.
+  rewrite LJ_DLJ_iff.
+  rewrite DLJ_DLI_iff.
+  exact HPr.
+- right.
+  rewrite LJ_DLJ_iff.
+  rewrite DLJ_DLI_iff.
+  exact HPrN.
 Qed.
-
-
-
-
-
-
-
-
-
-
-
-Lemma DLI_conj_elimL:
-  forall P1 P2 P3 L1,
-    DLI_provable (PPconj P1 P2::L1) P3 ->
-    DLI_provable (P1::P2::L1) P3.
-Proof.
-intros KP1 KP2 KP3 KL1 H.
-remember (PPconj KP1 KP2::KL1) as KL2.
-apply eq_then_Permutation in HeqKL2.
-revert KL1 HeqKL2.
-induction H.
-- intros KL1 HeqKL2.
-  apply IHDLI_provable.
-  rewrite H,HeqKL2.
-  reflexivity.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + rewrite PrA.
-    apply DLI_conj_succedent.
-    * apply DLI_axiom.
-    * rewrite perm_swap.
-      apply DLI_axiom.
-  + rewrite PrC.
-    DLI_reorder_antecedent (P1 :: KP1 :: KP2 :: KL2').
-    apply DLI_axiom.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    DLI_reorder_antecedent (PPbot :: KP1 :: KP2 :: KL2').
-    apply DLI_exfalso.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  { congruence. }
-  rewrite PrC.
-  apply PProp_perm_select in PrD.
-  destruct PrD as [(PrE,PrF) | (KL2'',(PrG,PrH))].
-  { congruence. }
-  rewrite PrG.
-  DLI_reorder_antecedent (PPimpl (PPatom A1) P1 :: PPatom A1 :: KP1 :: KP2 :: KL2'').
-  apply DLI_impl_antecedent_atom.
-  DLI_reorder_antecedent (KP1::KP2::P1::PPatom A1::KL2'').
-  apply IHDLI_provable.
-  rewrite PrH; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    DLI_reorder_antecedent (PPimpl (PPimpl P2 P3) P1 :: KP1 :: KP2 :: KL2').
-    apply DLI_impl_antecedent_impl.
-    * DLI_reorder_antecedent (KP1 :: KP2 :: PPimpl P3 P1 :: KL2').
-      apply IHDLI_provable1.
-      rewrite PrD; perm.
-    * DLI_reorder_antecedent (KP1 :: KP2 :: P1 :: KL2').
-      apply IHDLI_provable2.
-      rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    DLI_reorder_antecedent (PPimpl (PPconj P2 P3) P1 :: KP1 :: KP2 :: KL2').
-    apply DLI_impl_antecedent_conj.
-    DLI_reorder_antecedent (KP1 :: KP2 :: PPimpl P2 (PPimpl P3 P1) :: KL2').
-    apply IHDLI_provable.
-    rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    DLI_reorder_antecedent (PPimpl (PPdisj P2 P3) P1 :: KP1 :: KP2 :: KL2').
-    apply DLI_impl_antecedent_disj.
-    DLI_reorder_antecedent (KP1 :: KP2 :: PPimpl P2 P1 :: PPimpl P3 P1 :: KL2').
-    apply IHDLI_provable.
-    rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply DLI_impl_succedent.
-  DLI_reorder_antecedent (KP1 :: KP2 :: P1 :: KL1).
-  apply IHDLI_provable.
-  rewrite HeqKL2; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + replace KP1 with P1 by congruence.
-    replace KP2 with P2 by congruence.
-    rewrite <-PrB.
-    exact H.
-  + rewrite PrC.
-    DLI_reorder_antecedent (PPconj P1 P2 :: KP1 :: KP2 :: KL2').
-    apply DLI_conj_antecedent.
-    DLI_reorder_antecedent (KP1 :: KP2 :: P1 :: P2 :: KL2').
-    apply IHDLI_provable.
-    rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply DLI_conj_succedent.
-  + apply IHDLI_provable1.
-    rewrite HeqKL2; perm.
-  + apply IHDLI_provable2.
-    rewrite HeqKL2; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    DLI_reorder_antecedent (PPdisj P1 P2 :: KP1 :: KP2 :: KL2').
-    apply DLI_disj_antecedent.
-    * DLI_reorder_antecedent (KP1 :: KP2 :: P1 :: KL2').
-      apply IHDLI_provable1.
-      rewrite PrD; perm.
-    * DLI_reorder_antecedent (KP1 :: KP2 :: P2 :: KL2').
-      apply IHDLI_provable2.
-      rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply DLI_disj_succedent_l.
-  apply IHDLI_provable.
-  exact HeqKL2.
-- intros KL1 HeqKL2.
-  apply DLI_disj_succedent_r.
-  apply IHDLI_provable.
-  exact HeqKL2.
-Qed.
-
-Lemma DLI_disj_elimL_l:
-  forall P1 P2 P3 L1,
-    DLI_provable (PPdisj P1 P2::L1) P3 ->
-    DLI_provable (P1::L1) P3.
-Proof.
-intros KP1 KP2 KP3 KL1 H.
-remember (PPdisj KP1 KP2::KL1) as KL2.
-apply eq_then_Permutation in HeqKL2.
-revert KL1 HeqKL2.
-induction H.
-- intros KL1 HeqKL2.
-  apply IHDLI_provable.
-  rewrite H,HeqKL2.
-  reflexivity.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + rewrite PrA.
-    apply DLI_disj_succedent_l.
-    apply DLI_axiom.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_axiom.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_exfalso.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  { congruence. }
-  rewrite PrC.
-  apply PProp_perm_select in PrD.
-  destruct PrD as [(PrE,PrF) | (KL2'',(PrG,PrH))].
-  { congruence. }
-  rewrite PrG.
-  DLI_reorder_antecedent (PPimpl (PPatom A1) P1 :: PPatom A1 :: KP1 :: KL2'').
-  apply DLI_impl_antecedent_atom.
-  DLI_reorder_antecedent (KP1::P1::PPatom A1::KL2'').
-  apply IHDLI_provable.
-  rewrite PrH; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_impl_antecedent_impl.
-    * rewrite perm_swap.
-      apply IHDLI_provable1.
-      rewrite PrD; perm.
-    * rewrite perm_swap.
-      apply IHDLI_provable2.
-      rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_impl_antecedent_conj.
-    rewrite perm_swap.
-    apply IHDLI_provable.
-    rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_impl_antecedent_disj.
-    DLI_reorder_antecedent (KP1 :: PPimpl P2 P1 :: PPimpl P3 P1 :: KL2').
-    apply IHDLI_provable.
-    rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply DLI_impl_succedent.
-  rewrite perm_swap.
-  apply IHDLI_provable.
-  rewrite HeqKL2; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_conj_antecedent.
-    DLI_reorder_antecedent (KP1 :: P1 :: P2 :: KL2').
-    apply IHDLI_provable.
-    rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply DLI_conj_succedent.
-  + apply IHDLI_provable1.
-    rewrite HeqKL2; perm.
-  + apply IHDLI_provable2.
-    rewrite HeqKL2; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + replace KP1 with P1 by congruence.
-    rewrite <-PrB.
-    exact H.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_disj_antecedent.
-    * rewrite perm_swap.
-      apply IHDLI_provable1.
-      rewrite PrD; perm.
-    * rewrite perm_swap.
-      apply IHDLI_provable2.
-      rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply DLI_disj_succedent_l.
-  apply IHDLI_provable.
-  exact HeqKL2.
-- intros KL1 HeqKL2.
-  apply DLI_disj_succedent_r.
-  apply IHDLI_provable.
-  exact HeqKL2.
-Qed.
-
-Lemma DLI_disj_elimL_r:
-  forall P1 P2 P3 L1,
-    DLI_provable (PPdisj P1 P2::L1) P3 ->
-    DLI_provable (P2::L1) P3.
-Proof.
-intros KP1 KP2 KP3 KL1 H.
-remember (PPdisj KP1 KP2::KL1) as KL2.
-apply eq_then_Permutation in HeqKL2.
-revert KL1 HeqKL2.
-induction H.
-- intros KL1 HeqKL2.
-  apply IHDLI_provable.
-  rewrite H,HeqKL2.
-  reflexivity.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + rewrite PrA.
-    apply DLI_disj_succedent_r.
-    apply DLI_axiom.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_axiom.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_exfalso.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  { congruence. }
-  rewrite PrC.
-  apply PProp_perm_select in PrD.
-  destruct PrD as [(PrE,PrF) | (KL2'',(PrG,PrH))].
-  { congruence. }
-  rewrite PrG.
-  DLI_reorder_antecedent (PPimpl (PPatom A1) P1 :: PPatom A1 :: KP2 :: KL2'').
-  apply DLI_impl_antecedent_atom.
-  DLI_reorder_antecedent (KP2::P1::PPatom A1::KL2'').
-  apply IHDLI_provable.
-  rewrite PrH; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_impl_antecedent_impl.
-    * rewrite perm_swap.
-      apply IHDLI_provable1.
-      rewrite PrD; perm.
-    * rewrite perm_swap.
-      apply IHDLI_provable2.
-      rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_impl_antecedent_conj.
-    rewrite perm_swap.
-    apply IHDLI_provable.
-    rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_impl_antecedent_disj.
-    DLI_reorder_antecedent (KP2 :: PPimpl P2 P1 :: PPimpl P3 P1 :: KL2').
-    apply IHDLI_provable.
-    rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply DLI_impl_succedent.
-  rewrite perm_swap.
-  apply IHDLI_provable.
-  rewrite HeqKL2; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_conj_antecedent.
-    DLI_reorder_antecedent (KP2 :: P1 :: P2 :: KL2').
-    apply IHDLI_provable.
-    rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply DLI_conj_succedent.
-  + apply IHDLI_provable1.
-    rewrite HeqKL2; perm.
-  + apply IHDLI_provable2.
-    rewrite HeqKL2; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + replace KP2 with P2 by congruence.
-    rewrite <-PrB.
-    exact H0.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_disj_antecedent.
-    * rewrite perm_swap.
-      apply IHDLI_provable1.
-      rewrite PrD; perm.
-    * rewrite perm_swap.
-      apply IHDLI_provable2.
-      rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply DLI_disj_succedent_l.
-  apply IHDLI_provable.
-  exact HeqKL2.
-- intros KL1 HeqKL2.
-  apply DLI_disj_succedent_r.
-  apply IHDLI_provable.
-  exact HeqKL2.
-Qed.
-
-Definition DLI_contr_permselect := DLJ_contr_permselect.
-
-Lemma DLI_contr_withantweak:
-  forall P1 P2 L1,
-    DLI_provable (P1::P1::L1) P2 -> DLI_provable (P1::L1) P2.
-Proof.
-induction P1 as (KP1,HI_rank) using (well_founded_ind PProp_small_wellfounded).
-intros KP2 KL1 H.
-remember (KP1::KP1::KL1) as KL2 in H.
-apply eq_then_Permutation in HeqKL2.
-revert KL1 HeqKL2.
-induction H.
-- intros OL1 HeqKL2.
-  apply IHDLI_provable.
-  rewrite H,HeqKL2; reflexivity.
-- intros OL1 HeqKL2.
-  apply DLI_contr_permselect in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + rewrite PrA.
-    apply DLI_axiom.
-  + rewrite PrC.
-    DLI_reorder_antecedent (P1::KP1::KL2').
-    apply DLI_axiom.
-- intros OL1 HeqKL2.
-  apply DLI_contr_permselect in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + rewrite <-PrA.
-    apply DLI_exfalso.
-  + rewrite PrC.
-    DLI_reorder_antecedent (PPbot::KP1::KL2').
-    apply DLI_exfalso.
-- intros OL1 HeqKL2.
-  apply DLI_contr_permselect in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + apply PProp_perm_select in PrB.
-    destruct PrB as [(PrE,PrF) | (KL2',(PrG,PrH))].
-    { congruence. }
-    rewrite PrG.
-    rewrite <-PrA.
-    apply DLI_impl_antecedent_atom.
-    apply HI_rank.
-    { apply (PPsmall_impl_r _ (eq_sym PrA)). }
-    
-  +
-
-- intros OL1 HeqKL2.
-  apply DLI_contr_permselect in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + rewrite <-PrA.
-    {
-      apply DLI_impl_antecedent.
-      - rewrite PrA.
-        apply IHDLI_provable1.
-        rewrite PrB,<-PrA; reflexivity.
-      - apply HI_rank.
-        + apply (PPsmall_impl_r _ (eq_sym PrA)).
-        + apply DLI_impl_antecedent_weak with (P1:=P1).
-          rewrite PrA.
-          rewrite perm_swap.
-          rewrite <-PrB.
-          exact H0.
-    }
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_impl_antecedent.
-    * rewrite perm_swap.
-      apply IHDLI_provable1.
-      rewrite PrD; perm.
-    * rewrite perm_swap.
-      apply IHDLI_provable2.
-      rewrite PrD; perm.
-- intros OL1 HeqKL2.
-  apply DLI_impl_succedent.
-  rewrite perm_swap.
-  apply IHDLI_provable.
-  rewrite HeqKL2; perm.
-- intros OL1 HeqKL2.
-  apply DLI_contr_permselect in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + rewrite <-PrA.
-    {
-      apply DLI_conj_antecedent.
-      apply HI_rank.
-      {
-        apply (PPsmall_conj_l _ (eq_sym PrA)).
-      }
-      DLI_reorder_antecedent (P2::P1::P1::OL1).
-      apply HI_rank.
-      {
-        apply (PPsmall_conj_r _ (eq_sym PrA)).
-      }
-      DLI_reorder_antecedent (P1::P2::P1::P2::OL1).
-      apply DLI_conj_elimL.
-      rewrite PrA.
-      DLI_reorder_antecedent (P1::P2::KP1::OL1).
-      rewrite <-PrB.
-      exact H.
-    }
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_conj_antecedent.
-    DLI_reorder_antecedent (KP1::P1::P2::KL2').
-    apply IHDLI_provable.
-    rewrite PrD; perm.
-- intros OL1 HeqKL2.
-  apply DLI_conj_succedent.
-  + apply IHDLI_provable1.
-    exact HeqKL2.
-  + apply IHDLI_provable2.
-    exact HeqKL2.
-- intros OL1 HeqKL2.
-  apply DLI_contr_permselect in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + rewrite <-PrA.
-    {
-      apply DLI_disj_antecedent.
-      - apply HI_rank.
-        {
-          apply (PPsmall_disj_l _ (eq_sym PrA)).
-        }
-        apply DLI_disj_elimL_l with (P2:=P2).
-        rewrite PrA.
-        rewrite perm_swap.
-        rewrite <-PrB.
-        exact H.
-      - apply HI_rank.
-        {
-          apply (PPsmall_disj_r _ (eq_sym PrA)).
-        }
-        apply DLI_disj_elimL_r with (P1:=P1).
-        rewrite PrA.
-        rewrite perm_swap.
-        rewrite <-PrB.
-        exact H0.
-    }
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_disj_antecedent.
-    * rewrite perm_swap.
-      apply IHDLI_provable1.
-      rewrite PrD; perm.
-    * rewrite perm_swap.
-      apply IHDLI_provable2.
-      rewrite PrD; perm.
-- intros OL1 HeqKL2.
-  apply DLI_disj_succedent_l.
-  apply IHDLI_provable.
-  exact HeqKL2.
-- intros OL1 HeqKL2.
-  apply DLI_disj_succedent_r.
-  apply IHDLI_provable.
-  exact HeqKL2.
-Qed.
-
-Lemma DLI_impl_antecedent_weak:
-  forall P1 P2 P3 L1,
-    DLI_provable (PPimpl P1 P2::L1) P3 ->
-    DLI_provable (P2::L1) P3.
-Proof.
-induction P1 as (KP1,HI_rank) using (well_founded_ind PProp_small_wellfounded).
-intros KP2 KP3 KL1 H.
-remember (PPimpl KP1 KP2 :: KL1) as KL2 in H.
-apply eq_then_Permutation in HeqKL2.
-revert KL1 HeqKL2.
-induction H.
-- intros KL1 HeqKL2.
-  apply IHDLI_provable.
-  rewrite H,HeqKL2; reflexivity.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + rewrite PrA.
-    apply DLI_impl_succedent.
-    rewrite perm_swap.
-    apply DLI_axiom.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_axiom.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + congruence.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_exfalso.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + replace KP2 with P1 by congruence.
-    rewrite <-PrB.
-    exact H.
-  + apply PProp_perm_select in PrD.
-    destruct PrD as [(PrE,PrF) | (KL2'',(PrG,PrH))].
-    { congruence. }
-    rewrite PrC.
-    rewrite PrG.
-    DLI_reorder_antecedent (PPimpl (PPatom A1) P1 :: PPatom A1 :: KP2 :: KL2'').
-    apply DLI_impl_antecedent_atom.
-    DLI_reorder_antecedent (KP2 :: P1 :: PPatom A1 :: KL2'').
-    apply IHDLI_provable.
-    rewrite PrH; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + replace KP2 with P1 by congruence.
-    rewrite <-PrB.
-    exact H0.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_impl_antecedent_impl.
-    * rewrite perm_swap.
-      apply IHDLI_provable1.
-      rewrite PrD; perm.
-    * rewrite perm_swap.
-      apply IHDLI_provable2.
-      rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + replace KP2 with P1 by congruence.
-    rewrite <-PrB.
-    apply HI_rank with (y:=P3).
-    { apply (PPsmall_conj_r P2); congruence. }
-    apply HI_rank with (y:=P2).
-    { apply (PPsmall_conj_l P3); congruence. }
-    exact H.
-  + rewrite PrC.
-    rewrite perm_swap.
-    apply DLI_impl_antecedent_conj.
-    rewrite perm_swap.
-    apply IHDLI_provable.
-    rewrite PrD; perm.
-- intros KL1 HeqKL2.
-  apply PProp_perm_select in HeqKL2.
-  destruct HeqKL2 as [(PrA,PrB) | (KL2',(PrC,PrD))].
-  + replace KP2 with P1 by congruence.
-    rewrite <-PrB.
-    re
-  +
-- intros KL1 HeqKL2.
-- intros KL1 HeqKL2.
-- intros KL1 HeqKL2.
-- intros KL1 HeqKL2.
-- intros KL1 HeqKL2.
-- intros KL1 HeqKL2.
-Qed.
-
-Lemma DLI_impl_antecedent2:
-  forall P1 P2 P3 L1,
-    DLI_provable (P2::P1::L1) P3 ->
-    DLI_provable (PPimpl P1 P2::P1::L1) P3.
-Proof.
-intros KP1.
-induction KP1.
-- intros KP2 KP3 KL1 H.
-  rewrite perm_swap.
-  apply DLI_exfalso.
-- intros KP2 KP3 KL1 H.
-  apply DLI_impl_antecedent_atom.
-  exact H.
-- intros KP2 KP3 KL1 H.
-  apply DLI_impl_antecedent_impl.
-  + apply DLI_impl_succedent.
-    DLI_reorder_antecedent (PPimpl KP1_1 KP1_2::KP1_1::PPimpl KP1_2 KP2::KL1).
-    apply IHKP1_1.
-    DLI_reorder_antecedent (PPimpl KP1_2 KP2::KP1_2::KP1_1::KL1).
-    apply IHKP1_2.
-    DLI_reorder_antecedent (KP1_2::KP2::KP1_1::KL1).
-    apply DLI_axiom.
-  + exact H.
-- intros KP2 KP3 KL1 H.
-  apply DLI_impl_antecedent_conj.
-  rewrite perm_swap.
-  apply DLI_conj_antecedent.
-  DLI_reorder_antecedent (PPimpl KP1_1 (PPimpl KP1_2 KP2)::KP1_1::KP1_2::KL1).
-  apply IHKP1_1.
-  DLI_reorder_antecedent (PPimpl KP1_2 KP2::KP1_2::KP1_1::KL1).
-  apply IHKP1_2.
-  DLI_reorder_antecedent (KP1_1 :: KP1_2 :: KP2 :: KL1).
-  apply DLI_conj_elimL.
-  rewrite perm_swap.
-  exact H.
-- intros KP2 KP3 KL1 H.
-  apply DLI_impl_antecedent_disj.
-  DLI_reorder_antecedent
-    (PPdisj KP1_1 KP1_2::PPimpl KP1_1 KP2::PPimpl KP1_2 KP2 :: KL1).
-  apply DLI_disj_antecedent.
-  + DLI_reorder_antecedent (PPimpl KP1_1 KP2 :: KP1_1 :: PPimpl KP1_2 KP2 :: KL1).
-    apply IHKP1_1.
-    DLI_reorder_antecedent (PPimpl KP1_2 KP2 :: KP1_1 :: KP2 :: KL1).
-    apply DLI_weak.
-    apply DLI_disj_elimL_l with (P2:=KP1_2).
-    rewrite perm_swap.
-    exact H.
-  + DLI_reorder_antecedent (PPimpl KP1_2 KP2 :: KP1_2 :: PPimpl KP1_1 KP2 :: KL1).
-    apply IHKP1_2.
-    DLI_reorder_antecedent (PPimpl KP1_1 KP2 :: KP1_2 :: KP2 :: KL1).
-    apply DLI_weak.
-    apply DLI_disj_elimL_r with (P1:=KP1_1).
-    rewrite perm_swap.
-    exact H.
-Qed.
-
