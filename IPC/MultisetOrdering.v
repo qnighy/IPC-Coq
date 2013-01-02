@@ -171,7 +171,16 @@ intros KL.
 remember (length KL) as n.
 revert KL Heqn.
 induction n.
-- admit.
+- intros KL HKL.
+  destruct KL; [clear HKL|simpl in HKL; congruence].
+  exists.
+  intros L (LH,(LT1,(LT2,((HL1,HL2),((PI,HPI),HLA))))).
+  exfalso.
+  change (In PI nil).
+  rewrite HL2.
+  rewrite in_app_iff.
+  right.
+  exact HPI.
 - intros KL' Heqn.
   apply maximal_exists_cont with (L:=KL').
   intros [IHKL|(a,(HaKL,Ha_max'))].
@@ -181,23 +190,15 @@ induction n.
   clear HKLS.
   rewrite HKLS' in Heqn |- *.
   simpl in Heqn; apply eq_add_S in Heqn.
-  assert (Ha_max:
-      forall b, In b (a::KL1++KL2) -> clos_trans A R a b ->
-        Acc multiset_ordering (a::KL1++KL2)).
-  {
-    intros b.
-    rewrite <-HKLS'.
-    apply Ha_max'.
-  }
   clear Ha_max'.
   remember (KL1 ++ KL2) as KL.
   clear KL' KL1 KL2 HaKL HKLS' HeqKL.
   assert (IHKL := IHn _ Heqn).
   clear n IHn Heqn.
 
-  revert KL Ha_max IHKL.
+  revert KL IHKL.
   induction a as (a,IHa) using (well_founded_ind R_wf).
-  intros KL Ha_max IHKL.
+  intros KL IHKL.
   remember IHKL as IHKL'; clear HeqIHKL'.
   induction IHKL as (KL,IHKL,IHIHKL).
   exists.
@@ -227,43 +228,6 @@ induction n.
       split.
       { exists PI; exact HPI. }
       exact HLA.
-    * {
-        intros b Hb Hab.
-        simpl in Hb.
-        rewrite in_app_iff in Hb.
-        rewrite <-or_assoc in Hb.
-        destruct Hb as [Hb|Hb].
-        - rewrite <-HL1.
-          apply (or_introl (B:=In b LT2)) in Hb.
-          rewrite or_assoc in Hb.
-          rewrite <-in_app_iff in Hb.
-          rewrite <-HL2 in Hb.
-          clear LT1 LT2 LH' HL1 HL2 PI HPI HLA.
-          revert L IHL.
-          refine (match _ with Acc_intro x => x end).
-          apply Ha_max with (b:=b).
-          + exact Hb.
-          + exact Hab.
-        - destruct (HLA _ Hb) as (P2,(HP2A,HP2B)).
-          rewrite <-HL1.
-          assert (HP2A': In P2 (a :: KL)).
-          {
-            right.
-            rewrite HL2.
-            rewrite in_app_iff.
-            right.
-            exact HP2A.
-          }
-          clear LT1 LT2 LH' HL1 HL2 PI HPI HLA Hb HP2A.
-          revert L IHL.
-          refine (match _ with Acc_intro x => x end).
-          apply Ha_max with (b:=P2).
-          + exact HP2A'.
-          + apply t_trans with b.
-            * exact Hab.
-            * apply t_step.
-              exact HP2B.
-      }
     * apply IHKL.
       exists LH',LT1,LT2.
       {
@@ -298,64 +262,53 @@ induction n.
         using relation (@Permutation A) in HL2; [|perm].
     apply Permutation_cons_inv in HL2.
     clear PI HPI.
+
     assert (HLA3:
-        LT1 = nil \/
-          (LT1 <> nil /\ exists P1, In P1 LT1 /\ R P1 a) \/
-          (LT1 <> nil /\ forall P1, In P1 LT1 -> exists P2:A, In P2 LT2' /\ R P1 P2)).
+        exists LT1H LT1T,
+          Permutation LT1 (LT1H++LT1T) /\
+          (forall P1H, In P1H LT1H -> R P1H a) /\
+          (forall P1, In P1 LT1T -> exists P2:A, In P2 LT2' /\ R P1 P2)).
     {
       clear HL1.
       induction LT1.
-      - left.
-        reflexivity.
-      - right.
-        destruct IHLT1 as [IHLT1|[IHLT1|IHLT1]].
-        + intros P1 HP1.
+      - exists nil,nil.
+        split.
+        + reflexivity.
+        + split.
+          * intros P1H [].
+          * intros P1 [].
+      - destruct IHLT1 as (LT1H,(LT1T,(HLT1P,(HLT1H,HLT1T)))).
+        {
+          intros P1 HP1.
           apply HLA2.
           right.
           exact HP1.
-        + specialize (HLA2 _ (in_eq _ _)).
-          destruct HLA2 as (P2,([HP2A|HP2A],HP2B)).
-          * rewrite HP2A.
-            left.
-            split.
-            { congruence. }
-            exists a0.
-            split.
-            { apply in_eq. }
-            exact HP2B.
-          * rewrite IHLT1.
-            right.
-            split.
-            { congruence. }
-            intros P1 [HP1|[]].
-            exists P2.
-            split.
-            { exact HP2A. }
-            rewrite <-HP1.
-            exact HP2B.
-        + left.
-          destruct IHLT1 as (_,(P1,(HP1A,HP1B))).
+        }
+        destruct (HLA2 _ (in_eq _ _)) as (P2,([HP2A|HP2A],HP2B)).
+        + exists (a0::LT1H),LT1T.
           split.
-          { congruence. }
-          exists P1.
+          {
+            apply Permutation_cons.
+            exact HLT1P.
+          }
           split.
-          * right.
-            exact HP1A.
-          * exact HP1B.
-        + specialize (HLA2 _ (in_eq _ _)).
-          destruct HLA2 as (P2,([HP2A|HP2A],HP2B)).
-          * left.
-            split.
-            { congruence. }
-            exists a0.
-            split.
-            { apply in_eq. }
-            rewrite HP2A.
-            exact HP2B.
-          * right.
-            split.
-            { congruence. }
-            intros P1 [HP1|HP1].
+          * intros P1H [HP1H|HP1H].
+            {
+              rewrite <-HP1H.
+              rewrite HP2A.
+              exact HP2B.
+            }
+            apply HLT1H.
+            exact HP1H.
+          * exact HLT1T.
+        + exists LT1H,(a0::LT1T).
+          split.
+          {
+            rewrite HLT1P; perm.
+          }
+          split.
+          * exact HLT1H.
+          * intros P1 [HP1|HP1].
             {
               exists P2.
               split.
@@ -363,54 +316,100 @@ induction n.
               - rewrite <-HP1.
                 exact HP2B.
             }
-            exact ((proj2 IHLT1) P1 HP1).
+            apply HLT1T.
+            exact HP1.
     }
     clear HLA2.
-    destruct HLA3 as [HLA3|[HLA3|HLA3]].
-    * rewrite HLA3 in HL1.
-      clear LT1 HLA3.
-      rewrite app_nil_r in HL1.
-      rewrite <-HL1 in HL2.
-      clear LH HL1.
+    destruct HLA3 as (LT1H,(LT1T,(HLT1P,(HLT1H,HLT1T)))).
+    rewrite HLT1P in HL1.
+    setoid_replace (LH++LT1H++LT1T) with (LT1H++LH++LT1T)
+        using relation (@Permutation A) in HL1; [|perm].
+    clear LT1 HLT1P.
+    clear IHL.
+    revert L HL1.
+    induction LT1H.
+    * intros L HL1.
+      assert (LT1T_nilselect: LT1T = nil \/ LT1T <> nil).
       {
-        destruct LT2'.
-        - rewrite app_nil_r in HL2.
-          rewrite <-HL2.
-          exact IHKL'.
-        - apply IHKL.
-          exists L,nil,(a0::LT2').
-          {
-            split.
-            - split.
-              + rewrite app_nil_r.
-                reflexivity.
-              + exact HL2.
-            - split.
-              + exists a0.
-                apply in_eq.
-              + intros P1 [].
-          }
+        destruct LT1T.
+        - left; reflexivity.
+        - right; congruence.
       }
-    * 
-    * assert (HMO: multiset_ordering L KL).
+      destruct LT1T_nilselect as [LT1T_nil|LT1T_nonnil].
       {
-        exists LH,LT1,LT2'.
+        rewrite LT1T_nil in HL1.
+        rewrite app_nil_r in HL1.
+        rewrite app_nil_l in HL1.
+        clear LT1T HLT1T LT1T_nil.
+        rewrite <-HL1 in HL2.
+        clear LH HL1.
+        {
+          destruct LT2'.
+          - rewrite app_nil_r in HL2.
+            rewrite <-HL2.
+            exact IHKL'.
+          - apply IHKL.
+            exists L,nil,(a0::LT2').
+            {
+              split.
+              - split.
+                + rewrite app_nil_r.
+                  reflexivity.
+                + exact HL2.
+              - split.
+                + exists a0.
+                  apply in_eq.
+                + intros P1 [].
+            }
+        }
+      }
+      assert (HMO: multiset_ordering L KL).
+      {
+        exists LH,LT1T,LT2'.
         split.
         - exact (conj HL1 HL2).
         - split.
-          + destruct LT1 as [|LT1h LT1].
-            * destruct HLA3; congruence.
-            * destruct HLA3 as (_,HLA3).
-              specialize (HLA3 _ (in_eq _ _)).
-              destruct HLA3 as (P2,(HP2A,HP2B)).
+          + destruct LT1T as [|LT1Th LT1T].
+            * congruence.
+            * destruct (HLT1T LT1Th) as (P2,(HP2A,HP2B)).
+              {
+                apply in_eq.
+              }
               exists P2.
               exact HP2A.
-          + exact (proj2 HLA3).
+          + intros P1 HP1.
+            apply HLT1T.
+            exact HP1.
       }
-      clear IHL HL1.
+      clear HL1.
       revert L HMO.
       refine (match _ with Acc_intro x => x end).
       exact IHKL'.
+    * intros L HL1.
+      assert (Ha0in := in_eq a0 (LT1H++LH++LT1T)).
+      rewrite <-HL1 in Ha0in.
+      destruct (in_split _ _ Ha0in) as (LT1A,(LT1B,HLT1)).
+      rewrite HLT1.
+      rewrite HLT1 in HL1.
+      clear L Ha0in HLT1.
+      setoid_replace (LT1A++a0::LT1B) with (a0::LT1A++LT1B)
+          using relation (@Permutation A) in HL1; [|perm].
+      setoid_replace (LT1A++a0::LT1B) with (a0::LT1A++LT1B)
+          using relation (@Permutation A); [|perm].
+      apply Permutation_cons_inv in HL1.
+      apply IHa.
+      {
+        apply HLT1H.
+        apply in_eq.
+      }
+      apply IHLT1H.
+      {
+        intros P1H HP1H.
+        apply HLT1H.
+        right.
+        exact HP1H.
+      }
+      exact HL1.
 Qed.
 
 End MultisetOrdering.
