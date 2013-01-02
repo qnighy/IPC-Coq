@@ -57,8 +57,7 @@ induction HP.
 - apply IHHP2,IHHP1,H.
 Qed.
 
-Instance In_compat_perm(A:Type)
-  (eq_dec: forall x y:A, {x=y} + {x<>y}):
+Instance In_compat_perm(A:Type):
     Proper (eq ==> @Permutation A ==> iff) (@In A).
 Proof.
 unfold Proper,respectful.
@@ -69,6 +68,14 @@ split.
 - apply Permutation_In_In.
   symmetry.
   exact Hl.
+Qed.
+
+Instance length_compat_perm(A:Type):
+    Proper (@Permutation A ==> eq) (@length A).
+Proof.
+unfold Proper, respectful.
+intros LA LB HL.
+apply Permutation_length,HL.
 Qed.
 
 Lemma app_normalize_1:
