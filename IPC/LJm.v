@@ -61,10 +61,10 @@ Inductive LJm_provable : list PProp -> list PProp -> Prop :=
       LJm_provable L1 (PPdisj P1 P2::L2).
 
 Ltac LJm_reorder_antecedent L :=
-  apply (LJm_perm_antecedent _ L); [perm|].
+  apply (LJm_perm_antecedent L); [perm|].
 
 Ltac LJm_reorder_succedent L :=
-  apply (LJm_perm_succedent _ L); [perm|].
+  apply (LJm_perm_succedent L); [perm|].
 
 Instance LJm_provable_compat :
   Proper (@Permutation _==>@Permutation _==>iff) LJm_provable.
@@ -409,6 +409,31 @@ split.
 - apply LJm_provable_LJ_provable.
 Qed.
 
+Lemma LJm_disj_succedent:
+  forall P1 P2 L1 L2,
+    LJm_provable L1 (P1::P2::L2) ->
+    LJm_provable L1 (PPdisj P1 P2::L2).
+Proof.
+intros P1 P2 L1 L2 H.
+rewrite <-LJ_LJm_iff.
+apply LJ_cut with (P1:=fold_succedent (P1::P2::L2)).
+{
+  rewrite LJ_LJm_iff.
+  exact H.
+}
+simpl.
+apply LJ_disj_antecedent.
+- apply LJ_disj_succedent_l.
+  apply LJ_disj_succedent_l.
+  apply LJ_axiom2.
+- apply LJ_disj_antecedent.
+  + apply LJ_disj_succedent_l.
+    apply LJ_disj_succedent_r.
+    apply LJ_axiom2.
+  + apply LJ_disj_succedent_r.
+    apply LJ_axiom2.
+Qed.
+
 Lemma LJm_dec: forall L1 L2, {LJm_provable L1 L2} + {~LJm_provable L1 L2}.
 Proof.
 intros L1 L2.
@@ -439,6 +464,99 @@ Definition PProp_saturated_succedent(P1:PProp) (Suc:list PProp):Prop :=
   | PPdisj P1A P1B => In P1A Suc /\ In P1B Suc
   end.
 
+Instance PProp_saturated_antecedent_compat:
+  Proper (eq ==> @Permutation _ ==> @Permutation _ ==> iff)
+    PProp_saturated_antecedent.
+Proof.
+unfold Proper,respectful.
+intros P1 P HP.
+rewrite HP; clear P1 HP.
+intros AntA AntB HA SucA SucB HS.
+split.
+- intros H.
+  destruct P;
+    simpl in H |- *;
+    try rewrite <-HA;
+    try rewrite <-HS;
+    exact H.
+- intros H.
+  destruct P;
+    simpl in H |- *;
+    try rewrite HA;
+    try rewrite HS;
+    exact H.
+Qed.
+
+Instance PProp_saturated_succedent_compat:
+  Proper (eq ==> @Permutation _ ==> iff)
+    PProp_saturated_succedent.
+Proof.
+unfold Proper,respectful.
+intros P1 P HP.
+rewrite HP; clear P1 HP.
+intros SucA SucB HS.
+split.
+- intros H.
+  destruct P;
+    simpl in H |- *;
+    try rewrite <-HS;
+    exact H.
+- intros H.
+  destruct P;
+    simpl in H |- *;
+    try rewrite HS;
+    exact H.
+Qed.
+
+Lemma PProp_saturated_antecedent_weak_Ant:
+  forall P1 P2 Ant Suc,
+    PProp_saturated_antecedent P1 Ant Suc ->
+    PProp_saturated_antecedent P1 (P2::Ant) Suc.
+Proof.
+intros [|A1|P1A P1B|P1A P1B|P1A P1B] P2 Ant Suc H; simpl.
+- exact I.
+- exact I.
+- destruct H as [H|H].
+  + left; exact H.
+  + right; right; exact H.
+- destruct H as (HA,HB).
+  exact (conj (or_intror HA) (or_intror HB)).
+- destruct H as [H|H].
+  + left; right; exact H.
+  + right; right; exact H.
+Qed.
+
+Lemma PProp_saturated_antecedent_weak_Suc:
+  forall P1 P2 Ant Suc,
+    PProp_saturated_antecedent P1 Ant Suc ->
+    PProp_saturated_antecedent P1 Ant (P2::Suc).
+Proof.
+intros [|A1|P1A P1B|P1A P1B|P1A P1B] P2 Ant Suc H; simpl.
+- exact I.
+- exact I.
+- destruct H as [H|H].
+  + left; right; exact H.
+  + right; exact H.
+- exact H.
+- exact H.
+Qed.
+
+Lemma PProp_saturated_succedent_weak:
+  forall P1 P2 Suc,
+    PProp_saturated_succedent P1 Suc ->
+    PProp_saturated_succedent P1 (P2::Suc).
+Proof.
+intros [|A1|P1A P1B|P1A P1B|P1A P1B] P2 Suc H; simpl.
+- exact I.
+- exact I.
+- exact I.
+- destruct H as [H|H].
+  + left; right; exact H.
+  + right; right; exact H.
+- destruct H as (HA,HB).
+  exact (conj (or_intror HA) (or_intror HB)).
+Qed.
+
 Definition LJm_unprovable_saturated(Ant Suc:list PProp):Prop :=
   ~LJm_provable Ant Suc /\
   (forall P1, In P1 Ant -> PProp_saturated_antecedent P1 Ant Suc) /\
@@ -447,41 +565,63 @@ Definition LJm_unprovable_saturated(Ant Suc:list PProp):Prop :=
 Lemma LJm_saturate: forall Ant Suc, ~LJm_provable Ant Suc ->
   exists L1 L2, LJm_unprovable_saturated (L1++Ant) (L2++Suc).
 Proof.
-intros Ant Suc HPrN.
-remember Ant as Ant' in |-.
-remember Suc as Suc' in |-.
 unfold LJm_unprovable_saturated.
-cut (exists L1 L2,
-  ~LJm_provable (L1++Ant) (L2++Suc) /\
-  (forall P1, In P1 (L1++Ant') -> PProp_saturated_antecedent P1 (L1++Ant) (L2++Suc)) /\
-  (forall P1, In P1 (L2++Suc') -> PProp_saturated_succedent P1 (L2++Suc))).
+cut (forall LA Ant Suc, ~LJm_provable (LA++Ant) Suc ->
+  exists L1 L2,
+    ~LJm_provable (L1++LA++Ant) (L2++Suc) /\
+    (forall P1, In P1 (L1++Ant) ->
+      PProp_saturated_antecedent P1 (L1++LA++Ant) (L2++Suc)) /\
+    (forall P1, In P1 (L2++Suc) -> PProp_saturated_succedent P1 (L2++Suc))
+).
 {
-  intros (L1,(L2,H)).
-  exists L1,L2.
-  rewrite HeqAnt',HeqSuc' in H.
-  exact H.
+  intros H.
+  exact (H nil).
 }
-clear HeqAnt' HeqSuc'.
-remember (Ant'++Suc') as KL.
-revert Ant' Suc' HeqKL.
-induction KL as (KL,IHKL) using
+intros LA Ant Suc.
+revert LA Suc.
+induction Ant as (Ant,IHAnt') using
     (well_founded_induction
       (multiset_ordering_wf _ _
         PProp_small_wellfounded)).
-rename IHKL into IHKL'.
-assert (IHKL:=fun Ant' Suc' H0 => IHKL' _ H0 Ant' Suc' (eq_refl _)).
-clear IHKL'.
-intros Ant' Suc' HeqKL.
-rewrite HeqKL in * |- *; clear KL HeqKL.
-destruct Ant' as [|[|A1|P1 P2|P1 P2|P1 P2] AntT].
-- destruct Suc' as [|[|A1|P1 P2|P1 P2|P1 P2] SucT].
-  + exists nil,nil.
+destruct Ant as [|AntH AntT].
+- cut (forall LA LS Suc, ~LJm_provable LA (LS++Suc) ->
+    exists L2,
+      ~LJm_provable LA (L2++LS++Suc) /\
+      (forall P1, In P1 (L2++Suc) ->
+        PProp_saturated_succedent P1 (L2++LS++Suc))
+  ).
+  {
+    intros H.
+    intros LA Suc HPrN.
+    rewrite app_nil_r in HPrN.
+    specialize (H LA nil Suc HPrN).
+    rewrite app_nil_r.
+    destruct H as (L2,(HA,HB)).
+    exists nil,L2.
+    split; [|split].
+    - exact HA.
+    - intros P1 [].
+    - exact HB.
+  }
+  intros LA LS Suc.
+  revert LA LS.
+  induction Suc as (Suc,IHSuc') using
+      (well_founded_induction
+        (multiset_ordering_wf _ _
+          PProp_small_wellfounded)).
+  assert (IHSuc := fun y LA LS H => IHSuc' y H LA LS).
+  clear IHSuc'.
+  destruct Suc as [|SucH SucT].
+  {
+    intros LA LS HPrN.
+    exists nil.
     split.
-    { exact HPrN. }
-    split.
-    * intros P1 [].
-    * intros P1 [].
-  + destruct (IHKL nil SucT) as (L1,(L2,(HA,(HB,HC)))).
+    - exact HPrN.
+    - intros P1 [].
+  }
+  intros LA LS HPrN.
+  destruct SucH as [|A1|P1 P2|P1 P2|P1 P2].
+  + destruct (IHSuc SucT LA (PPbot::LS)) as (L2,(HL2A,HL2B)).
     {
       exists SucT,nil,(PPbot::nil).
       split.
@@ -491,20 +631,28 @@ destruct Ant' as [|[|A1|P1 P2|P1 P2|P1 P2] AntT].
       intros P0 [].
     }
     {
-      exists L1,L2.
-      split.
-      { exact HA. }
-      {
-        split.
-        - exact HB.
-        - setoid_replace (L2++PPbot::SucT) with (PPbot::L2++SucT); [|perm].
-          intros P1 [HP1|HP1].
-          + rewrite <-HP1.
-            exists.
-          + apply HC,HP1.
-      }
+      intros HPr.
+      contradict HPrN.
+      LJm_reorder_succedent (PPbot::LS++SucT).
+      exact HPr.
     }
-  + destruct (IHKL nil SucT) as (L1,(L2,(HA,(HB,HC)))).
+    exists L2.
+    split.
+    {
+      intros HPrC.
+      contradict HL2A.
+      LJm_reorder_succedent (L2++LS++PPbot::SucT).
+      exact HPrC.
+    }
+    setoid_replace (L2++PPbot::SucT)
+        with (PPbot::L2++SucT); [|perm].
+    intros P0 [HP0|HP0].
+    * rewrite <-HP0.
+      exact I.
+    * setoid_replace (L2++LS++PPbot::SucT)
+          with (L2++(PPbot::LS)++SucT); [|perm].
+      apply HL2B,HP0.
+  + destruct (IHSuc SucT LA (PPatom A1::LS)) as (L2,(HL2A,HL2B)).
     {
       exists SucT,nil,(PPatom A1::nil).
       split.
@@ -514,20 +662,28 @@ destruct Ant' as [|[|A1|P1 P2|P1 P2|P1 P2] AntT].
       intros P0 [].
     }
     {
-      exists L1,L2.
-      split.
-      { exact HA. }
-      {
-        split.
-        - exact HB.
-        - setoid_replace (L2++PPatom A1::SucT) with (PPatom A1::L2++SucT); [|perm].
-          intros P1 [HP1|HP1].
-          + rewrite <-HP1.
-            exists.
-          + apply HC,HP1.
-      }
+      intros HPr.
+      contradict HPrN.
+      LJm_reorder_succedent (PPatom A1::LS++SucT).
+      exact HPr.
     }
-  + destruct (IHKL nil SucT) as (L1,(L2,(HA,(HB,HC)))).
+    exists L2.
+    split.
+    {
+      intros HPrC.
+      contradict HL2A.
+      LJm_reorder_succedent (L2++LS++PPatom A1::SucT).
+      exact HPrC.
+    }
+    setoid_replace (L2++PPatom A1::SucT)
+        with (PPatom A1::L2++SucT); [|perm].
+    intros P0 [HP0|HP0].
+    * rewrite <-HP0.
+      exact I.
+    * setoid_replace (L2++LS++PPatom A1::SucT)
+          with (L2++(PPatom A1::LS)++SucT); [|perm].
+      apply HL2B,HP0.
+  + destruct (IHSuc SucT LA (PPimpl P1 P2::LS)) as (L2,(HL2A,HL2B)).
     {
       exists SucT,nil,(PPimpl P1 P2::nil).
       split.
@@ -537,67 +693,459 @@ destruct Ant' as [|[|A1|P1 P2|P1 P2|P1 P2] AntT].
       intros P0 [].
     }
     {
-      exists L1,L2.
-      split.
-      { exact HA. }
-      {
-        split.
-        - exact HB.
-        - setoid_replace (L2++PPimpl P1 P2::SucT) 
-              with (PPimpl P1 P2::L2++SucT); [|perm].
-          intros P0 [HP0|HP0].
-          + rewrite <-HP0.
-            exists.
-          + apply HC,HP0.
-      }
+      intros HPr.
+      contradict HPrN.
+      LJm_reorder_succedent (PPimpl P1 P2::LS++SucT).
+      exact HPr.
     }
-  + destruct (IHKL nil (P1::P2::SucT)) as (L1,(L2,(HA,(HB,HC)))).
+    exists L2.
+    split.
     {
-      exists SucT,(P1::P2::nil),(PPconj P1 P2::nil).
+      intros HPrC.
+      contradict HL2A.
+      LJm_reorder_succedent (L2++LS++PPimpl P1 P2::SucT).
+      exact HPrC.
+    }
+    setoid_replace (L2++PPimpl P1 P2::SucT)
+        with (PPimpl P1 P2::L2++SucT); [|perm].
+    intros P0 [HP0|HP0].
+    * rewrite <-HP0.
+      exact I.
+    * setoid_replace (L2++LS++PPimpl P1 P2::SucT)
+          with (L2++(PPimpl P1 P2::LS)++SucT); [|perm].
+      apply HL2B,HP0.
+  + destruct (LJm_dec LA (P1::LS++SucT)) as [HPrA|HPrNA].
+    * {
+        destruct (IHSuc (P2::SucT) LA (PPconj P1 P2::LS)) as (L2,(HL2A,HL2B)).
+        {
+          exists SucT,(P2::nil),(PPconj P1 P2::nil).
+          split.
+          { split; perm. }
+          split.
+          { congruence. }
+          intros P0 [HP0|[]].
+          rewrite <-HP0; clear P0 HP0.
+          exists (PPconj P1 P2).
+          split.
+          { apply in_eq. }
+          apply (PPsmall_conj_r _ (eq_refl _)).
+        }
+        {
+          intros HPrB.
+          contradict HPrN.
+          LJm_reorder_succedent (PPconj P1 P2::LS++SucT).
+          apply LJm_contr_succedent.
+          apply LJm_conj_succedent.
+          - rewrite perm_swap.
+            apply LJm_weak_succedent.
+            exact HPrA.
+          - LJm_reorder_succedent ((PPconj P1 P2::LS)++P2::SucT).
+            exact HPrB.
+        }
+        exists (P2::L2).
+        split.
+        {
+          intros HPrC.
+          contradict HL2A.
+          LJm_reorder_succedent (P2::L2++LS++PPconj P1 P2::SucT).
+          exact HPrC.
+        }
+        setoid_replace ((P2::L2)++PPconj P1 P2::SucT)
+            with (P2::PPconj P1 P2::L2++SucT); [|perm].
+        intros P0 [HP0|[HP0|HP0]].
+        * rewrite <-HP0.
+          setoid_replace ((P2::L2)++LS++PPconj P1 P2::SucT)
+              with (L2++(PPconj P1 P2::LS)++P2::SucT); [|perm].
+          apply HL2B.
+          rewrite in_app_iff; right.
+          apply in_eq.
+        * rewrite <-HP0.
+          right.
+          apply in_eq.
+        * setoid_replace ((P2::L2)++LS++PPconj P1 P2::SucT)
+              with (L2++(PPconj P1 P2::LS)++P2::SucT); [|perm].
+          apply HL2B.
+          setoid_replace (L2++P2::SucT) with (P2::L2++SucT); [|perm].
+          right.
+          exact HP0.
+      }
+    * {
+        destruct (IHSuc (P1::SucT) LA (PPconj P1 P2::LS)) as (L2,(HL2A,HL2B)).
+        {
+          exists SucT,(P1::nil),(PPconj P1 P2::nil).
+          split.
+          { split; perm. }
+          split.
+          { congruence. }
+          intros P0 [HP0|[]].
+          rewrite <-HP0; clear P0 HP0.
+          exists (PPconj P1 P2).
+          split.
+          { apply in_eq. }
+          apply (PPsmall_conj_l _ (eq_refl _)).
+        }
+        {
+          intros HPrA.
+          contradict HPrNA.
+          apply LJm_contr_succedent.
+          LJm_reorder_succedent (P1::LS++P1::SucT).
+          rewrite <-LJ_LJm_iff.
+          apply LJ_cut with (P1:=fold_succedent (PPconj P1 P2::LS++P1::SucT)).
+          {
+            rewrite LJ_LJm_iff.
+            exact HPrA.
+          }
+          simpl.
+          apply LJ_disj_antecedent.
+          - apply LJ_conj_antecedent.
+            apply LJ_disj_succedent_l.
+            apply LJ_axiom2.
+          - apply LJ_disj_succedent_r.
+            apply LJ_axiom2.
+        }
+        exists (P1::L2).
+        split.
+        {
+          intros HPrC.
+          contradict HL2A.
+          LJm_reorder_succedent (P1::L2++LS++PPconj P1 P2::SucT).
+          exact HPrC.
+        }
+        setoid_replace ((P1::L2)++PPconj P1 P2::SucT)
+            with (P1::PPconj P1 P2::L2++SucT); [|perm].
+        intros P0 [HP0|[HP0|HP0]].
+        * rewrite <-HP0.
+          setoid_replace ((P1::L2)++LS++PPconj P1 P2::SucT)
+              with (L2++(PPconj P1 P2::LS)++P1::SucT); [|perm].
+          apply HL2B.
+          rewrite in_app_iff; right.
+          apply in_eq.
+        * rewrite <-HP0.
+          left.
+          apply in_eq.
+        * setoid_replace ((P1::L2)++LS++PPconj P1 P2::SucT)
+              with (L2++(PPconj P1 P2::LS)++P1::SucT); [|perm].
+          apply HL2B.
+          setoid_replace (L2++P1::SucT) with (P1::L2++SucT); [|perm].
+          right.
+          exact HP0.
+      }
+  + destruct (IHSuc (P1::P2::SucT) LA (PPdisj P1 P2::LS)) as (L2,(HL2A,HL2B)).
+    {
+      exists SucT,(P1::P2::nil),(PPdisj P1 P2::nil).
       split.
       { split; perm. }
       split.
       { congruence. }
       intros P0 [HP0|[HP0|[]]].
       - rewrite <-HP0; clear P0 HP0.
-        exists (PPconj P1 P2).
+        exists (PPdisj P1 P2).
         split.
         { apply in_eq. }
-        apply (PPsmall_conj_l _ (eq_refl _)).
+        apply (PPsmall_disj_l _ (eq_refl _)).
       - rewrite <-HP0; clear P0 HP0.
-        exists (PPconj P1 P2).
+        exists (PPdisj P1 P2).
         split.
         { apply in_eq. }
-        apply (PPsmall_conj_r _ (eq_refl _)).
+        apply (PPsmall_disj_r _ (eq_refl _)).
     }
-    destruct (LJm_dec (L1++Ant) (P1::L2++Suc)) as [HPrA|HPrNA].
+    {
+      intros HPr.
+      contradict HPrN.
+      LJm_reorder_succedent (PPdisj P1 P2::LS++SucT).
+      apply LJm_contr_succedent.
+      apply LJm_disj_succedent.
+      LJm_reorder_succedent (PPdisj P1 P2::LS++P1::P2::SucT).
+      exact HPr.
+    }
+    exists (P1::P2::L2).
+    split.
+    {
+      intros HPrC.
+      contradict HL2A.
+      LJm_reorder_succedent (P1::P2::L2++LS++PPdisj P1 P2::SucT).
+      exact HPrC.
+    }
+    setoid_replace ((P1::P2::L2)++PPdisj P1 P2::SucT)
+        with (PPdisj P1 P2::L2++P1::P2::SucT); [|perm].
+    intros P0 [HP0|HP0].
     * {
-        exists L1,(P2::L2).
+        rewrite <-HP0.
         split.
-        {
-          intros HPrB.
-          contradict HA.
-          
-        }
-        split.
-        * exact HB.
-        * {
-            setoid_replace (L2++P1::P2::SucT) 
-                with (P1::P2::L2++SucT) in HC; [|perm].
-            setoid_replace (L2++PPconj P1 P2::SucT) 
-                with (PPconj P1 P2::L2++SucT); [|perm].
-            intros P0 [HP0|HP0].
-            * rewrite <-HP0.
-              simpl.
-              exists.
-            * apply HC,HP1.
-          }
+        - apply in_eq.
+        - right; apply in_eq.
       }
-    *
-  +
--
--
--
--
--
+    * setoid_replace ((P1::P2::L2)++LS++PPdisj P1 P2::SucT)
+          with (L2++(PPdisj P1 P2::LS)++P1::P2::SucT); [|perm].
+      apply HL2B,HP0.
+- assert (IHAnt := fun y LA Suc H => IHAnt' y H LA Suc).
+  clear IHAnt'.
+  intros LA Suc HPrN.
+  destruct AntH as [|A1|P1 P2|P1 P2|P1 P2].
+  + contradict HPrN.
+    LJm_reorder_antecedent (PPbot::LA++AntT).
+    apply LJm_exfalso2.
+  + destruct (IHAnt AntT (PPatom A1::LA) Suc) as (L1,(L2,(HL1A,(HL1B,HL1C)))).
+    {
+      exists AntT,nil,(PPatom A1::nil).
+      split.
+      { split; perm. }
+      split.
+      { congruence. }
+      intros P0 [].
+    }
+    {
+      intros HPr.
+      contradict HPrN.
+      LJm_reorder_antecedent (PPatom A1::LA++AntT).
+      exact HPr.
+    }
+    exists L1,L2.
+    split.
+    {
+      intros HPrA.
+      contradict HL1A.
+      LJm_reorder_antecedent (L1++LA++PPatom A1::AntT).
+      exact HPrA.
+    }
+    split; [|exact HL1C].
+    setoid_replace (L1++PPatom A1::AntT)
+        with (PPatom A1::L1++AntT); [|perm].
+    intros P0 [HP0|HP0].
+    * rewrite <-HP0.
+      exact I.
+    * setoid_replace (L1++LA++PPatom A1::AntT)
+         with (L1++PPatom A1::LA++AntT); [|perm].
+      apply HL1B,HP0.
+  + destruct (LJm_dec (PPimpl P1 P2::LA++AntT) (P1::Suc)) as [HPrA|HPrNA].
+    * destruct (IHAnt (P2::AntT) LA Suc) as (L1,(L2,(HL1A,(HL1B,HL1C)))).
+      {
+        exists AntT,(P2::nil),(PPimpl P1 P2::nil).
+        split.
+        { split; perm. }
+        split.
+        { congruence. }
+        intros P0 [HP0|[]].
+        rewrite <-HP0; clear P0 HP0.
+        exists (PPimpl P1 P2).
+        split.
+        { apply in_eq. }
+        apply (PPsmall_impl_r _ (eq_refl _)).
+      }
+      {
+        intros HPrB.
+        contradict HPrN.
+        LJm_reorder_antecedent (PPimpl P1 P2::LA++AntT).
+        apply LJm_contr_antecedent.
+        apply LJm_impl_antecedent.
+        - exact HPrA.
+        - LJm_reorder_antecedent (PPimpl P1 P2::LA++P2::AntT).
+          apply LJm_weak_antecedent.
+          exact HPrB.
+      }
+      exists (P2::L1),L2.
+      split.
+      {
+        intros HPrC.
+        contradict HL1A.
+        LJm_reorder_antecedent (P2::L1++LA++AntT).
+        rewrite <-LJ_LJm_iff.
+        apply LJ_cut with (P1:=PPimpl P1 P2).
+        {
+          apply LJ_impl_succedent,LJ_weak,LJ_axiom2.
+        }
+        rewrite LJ_LJm_iff.
+        LJm_reorder_antecedent (P2::L1++LA++PPimpl P1 P2::AntT).
+        exact HPrC.
+      }
+      split; [|exact HL1C].
+      setoid_replace ((P2::L1)++PPimpl P1 P2::AntT)
+          with (PPimpl P1 P2::L1++P2::AntT); [|perm].
+      {
+        intros P0 [HP0|HP0].
+        - rewrite <-HP0.
+          right.
+          apply in_eq.
+        - setoid_replace ((P2::L1)++LA++PPimpl P1 P2::AntT)
+             with (PPimpl P1 P2::L1++LA++P2::AntT); [|perm].
+          apply PProp_saturated_antecedent_weak_Ant.
+          apply HL1B,HP0.
+      }
+    * destruct (IHAnt AntT (PPimpl P1 P2::LA) (P1::Suc)) as (L1,(L2,(HL1A,(HL1B,HL1C)))).
+      {
+        exists AntT,nil,(PPimpl P1 P2::nil).
+        split.
+        { split; perm. }
+        split.
+        { congruence. }
+        intros P0 [].
+      }
+      {
+        intros HPrA.
+        contradict HPrNA.
+        exact HPrA.
+      }
+      exists L1,(P1::L2).
+      split.
+      {
+        intros HPrC.
+        contradict HL1A.
+        LJm_reorder_antecedent (L1++LA++PPimpl P1 P2::AntT).
+        LJm_reorder_succedent (P1::L2++Suc).
+        exact HPrC.
+      }
+      split.
+      {
+        setoid_replace (L1++PPimpl P1 P2::AntT)
+            with (PPimpl P1 P2::L1++AntT); [|perm].
+        {
+          intros P0 [HP0|HP0].
+          - rewrite <-HP0.
+            left.
+            apply in_eq.
+          - setoid_replace (L1++LA++PPimpl P1 P2::AntT)
+               with (L1++(PPimpl P1 P2::LA)++AntT); [|perm].
+            setoid_replace ((P1::L2)++Suc) with (L2++P1::Suc); [|perm].
+            apply HL1B,HP0.
+        }
+      }
+      {
+        setoid_replace ((P1::L2)++Suc) with (L2++P1::Suc); [|perm].
+        exact HL1C.
+      }
+  + destruct (IHAnt (P1::P2::AntT) (PPconj P1 P2::LA) Suc) as (L1,(L2,(HL1A,(HL1B,HL1C)))).
+      {
+        exists AntT,(P1::P2::nil),(PPconj P1 P2::nil).
+        split.
+        { split; perm. }
+        split.
+        { congruence. }
+        intros P0 [HP0|[HP0|[]]].
+        - rewrite <-HP0; clear P0 HP0.
+          exists (PPconj P1 P2).
+          split.
+          { apply in_eq. }
+          apply (PPsmall_conj_l _ (eq_refl _)).
+        - rewrite <-HP0; clear P0 HP0.
+          exists (PPconj P1 P2).
+          split.
+          { apply in_eq. }
+          apply (PPsmall_conj_r _ (eq_refl _)).
+      }
+      {
+        intros HPr.
+        contradict HPrN.
+        LJm_reorder_antecedent (PPconj P1 P2::LA++AntT).
+        apply LJm_contr_antecedent.
+        apply LJm_conj_antecedent.
+        LJm_reorder_antecedent (PPconj P1 P2::LA++P1::P2::AntT).
+        exact HPr.
+      }
+      exists (P1::P2::L1),L2.
+      split.
+      {
+        intros HPrC.
+        contradict HL1A.
+        LJm_reorder_antecedent (P1::P2::L1++LA++PPconj P1 P2::AntT).
+        exact HPrC.
+      }
+      split; [|exact HL1C].
+      setoid_replace ((P1::P2::L1)++PPconj P1 P2::AntT)
+          with (PPconj P1 P2::L1++P1::P2::AntT); [|perm].
+      {
+        intros P0 [HP0|HP0].
+        - rewrite <-HP0.
+          split.
+          + apply in_eq.
+          + right; apply in_eq.
+        - setoid_replace ((P1::P2::L1)++LA++PPconj P1 P2::AntT)
+             with (L1++PPconj P1 P2::LA++P1::P2::AntT); [|perm].
+          apply HL1B,HP0.
+      }
+  + destruct (LJm_dec (PPdisj P1 P2::P1::LA++AntT) Suc) as [HPrA|HPrNA].
+    * destruct (IHAnt (P2::AntT) (PPdisj P1 P2::LA) Suc) as (L1,(L2,(HL1A,(HL1B,HL1C)))).
+      {
+        exists AntT,(P2::nil),(PPdisj P1 P2::nil).
+        split.
+        { split; perm. }
+        split.
+        { congruence. }
+        intros P0 [HP0|[]].
+        rewrite <-HP0; clear P0 HP0.
+        exists (PPdisj P1 P2).
+        split.
+        { apply in_eq. }
+        apply (PPsmall_disj_r _ (eq_refl _)).
+      }
+      {
+        intros HPrB.
+        contradict HPrN.
+        LJm_reorder_antecedent (PPdisj P1 P2::LA++AntT).
+        apply LJm_contr_antecedent.
+        apply LJm_disj_antecedent.
+        - LJm_reorder_antecedent (PPdisj P1 P2::P1::LA++AntT).
+          exact HPrA.
+        - LJm_reorder_antecedent (PPdisj P1 P2::LA++P2::AntT).
+          exact HPrB.
+      }
+      exists (P2::L1),L2.
+      split.
+      {
+        intros HPrC.
+        contradict HL1A.
+        LJm_reorder_antecedent (P2::L1++LA++PPdisj P1 P2::AntT).
+        exact HPrC.
+      }
+      split; [|exact HL1C].
+      setoid_replace ((P2::L1)++PPdisj P1 P2::AntT)
+          with (PPdisj P1 P2::L1++P2::AntT); [|perm].
+      {
+        intros P0 [HP0|HP0].
+        - rewrite <-HP0.
+          right.
+          apply in_eq.
+        - setoid_replace ((P2::L1)++LA++PPdisj P1 P2::AntT)
+             with (L1++PPdisj P1 P2::LA++P2::AntT); [|perm].
+          apply HL1B,HP0.
+      }
+    * destruct (IHAnt (P1::AntT) (PPdisj P1 P2::LA) Suc) as (L1,(L2,(HL1A,(HL1B,HL1C)))).
+      {
+        exists AntT,(P1::nil),(PPdisj P1 P2::nil).
+        split.
+        { split; perm. }
+        split.
+        { congruence. }
+        intros P0 [HP0|[]].
+        rewrite <-HP0; clear P0 HP0.
+        exists (PPdisj P1 P2).
+        split.
+        { apply in_eq. }
+        apply (PPsmall_disj_l _ (eq_refl _)).
+      }
+      {
+        intros HPrA.
+        contradict HPrNA.
+        LJm_reorder_antecedent (PPdisj P1 P2::LA++P1::AntT).
+        exact HPrA.
+      }
+      exists (P1::L1),L2.
+      split.
+      {
+        intros HPrC.
+        contradict HL1A.
+        LJm_reorder_antecedent (P1::L1++LA++PPdisj P1 P2::AntT).
+        exact HPrC.
+      }
+      split; [|exact HL1C].
+      setoid_replace ((P1::L1)++PPdisj P1 P2::AntT)
+          with (PPdisj P1 P2::L1++P1::AntT); [|perm].
+      {
+        intros P0 [HP0|HP0].
+        - rewrite <-HP0.
+          left.
+          apply in_eq.
+        - setoid_replace ((P1::L1)++LA++PPdisj P1 P2::AntT)
+             with (L1++PPdisj P1 P2::LA++P1::AntT); [|perm].
+          apply HL1B,HP0.
+      }
 Qed.
